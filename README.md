@@ -31,7 +31,19 @@ A browser extension for collecting file URLs from configurable dork/search resul
 
 ## Installation
 
-1. Clone or download this repo
+### Download
+
+[![Download ZIP](https://img.shields.io/badge/download-zip-1a73e8?style=for-the-badge&logo=github)](https://github.com/iamutaki/dofiltor/archive/refs/heads/main.zip)
+
+Or clone:
+
+```bash
+git clone https://github.com/iamutaki/dofiltor.git
+```
+
+### Load in browser
+
+1. Unzip (if downloaded) and note the folder path
 2. Go to `chrome://extensions` (or any Chromium-based browser)
 3. Enable **Developer mode**
 4. Click **Load unpacked** and select the repo folder
