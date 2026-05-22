@@ -257,6 +257,11 @@ function extractUrls() {
     if (!actualUrl) continue;
 
     try { actualUrl = decodeURIComponent(actualUrl); } catch (e) { /* ignore */ }
+    try {
+      const parsed = new URL(actualUrl);
+      parsed.hash = "";
+      actualUrl = parsed.href;
+    } catch (e) { /* ignore */ }
 
     if (isProviderUrl(actualUrl)) continue;
     if (seen.has(actualUrl)) continue;

@@ -2,6 +2,7 @@ const I18N_STORAGE_KEY = "dofiltor_language";
 const I18N_DEFAULT_LANG = "en";
 const I18N_MESSAGES = {
   en: {
+    // Options page
     settings: "Settings",
     about: "About",
     appearance: "Appearance",
@@ -45,8 +46,126 @@ const I18N_MESSAGES = {
     description: "Description",
     version: "Version",
     repository: "Repository",
+
+    // Popup — header
+    appName: "Dofiltor",
+    appSubtitle: "Dork File Collector",
+    toggleExtension: "Toggle extension",
+    extensionOn: "Extension on",
+    extensionOff: "Extension off",
+    themeToggle: "Theme",
+
+    // Popup — auto-next bar
+    autoNextOn: "Auto-next",
+    autoNextOff: "Auto-next",
+    max: "Max",
+    pages: "pages",
+
+    // Popup — stats
+    statUrls: "URLs",
+    statValid: "Valid",
+    statDead: "Dead",
+    statTypes: "Types",
+
+    // Popup — toolbar
+    validate: "Validate",
+    export: "Export",
+    copyUrls: "Copy URLs",
+    batchDownload: "Batch download valid",
+    scanHistory: "Scan history",
+    settingsTooltip: "Settings",
+    aboutTooltip: "About",
+    removeDead: "Remove dead",
+    clearAll: "Clear all",
+
+    // Popup — sort
+    sortBy: "Sort by",
+    sortDesc: "Sort descending",
+    sortAsc: "Sort ascending",
+    sortDate: "Date",
+    sortSize: "Size",
+    sortStatus: "Status",
+    sortDomain: "Domain",
+    sortType: "Type",
+
+    // Popup — export format
+    exportFormat: "Export format",
+    formatCsv: "CSV",
+    formatTxt: "URL txt",
+    formatJson: "JSON",
+    formatDomainJson: "Domain JSON",
+
+    // Popup — search
+    searchPlaceholder: "Filter by filename or domain...",
+    searchClear: "Clear search",
+
+    // Popup — captcha
+    captchaDetected: "CAPTCHA detected — auto-next paused",
+    captchaShow: "Show",
+
+    // Popup — empty state
+    emptyTitle: "No URLs collected yet",
+    emptyDesc: "Run a dork query on any enabled provider.\nMatching file URLs appear here automatically.",
+
+    // Popup — footer
+    ready: "Ready",
+
+    // Popup — validation
+    checking: "Checking",
+    of: "of",
+    validating: "Validating...",
+
+    // Popup — status messages
+    statusValidDead: "{valid} valid, {dead} dead",
+    statusExported: "Exported {count} as {format}",
+    statusCopied: "Copied {count}",
+    statusCopiedFallback: "Copied",
+    statusDownloading: "Downloading {done}/{total}",
+    statusDownloaded: "Downloaded {done}/{total}",
+    statusNothingToDownload: "Nothing to download",
+    statusRemovedOne: "Removed 1 URL",
+    statusRemovedDead: "Removed {count} dead",
+    statusCleared: "Cleared {count} URLs",
+    statusNoHistory: "No scan history yet",
+    statusHistoryCleared: "History cleared",
+    statusRestored: "Restored",
+    statusEnabled: "Extension enabled",
+    statusDisabled: "Extension disabled",
+    statusSaved: "Settings saved",
+    statusPageOf: "Page {page} → {next}",
+    statusStopped: "Stopped",
+    statusDone: "Done",
+
+    // Popup — history
+    historyTitle: "Scan History ({count})",
+    historyClear: "Clear",
+    historyBack: "Back to URLs",
+    historyUrlsPages: "{urls} URLs · {pages} pages",
+
+    // Popup — misc
+    noMatching: "No matching URLs",
+    allFilter: "All",
+    downloaded: "downloaded",
+    valid: "valid",
+    dead: "dead",
+    pending: "pending",
+    open: "Open",
+    download: "Download",
+    undo: "Undo",
+
+    // Background — notifications
+    notifNewUrls: "{count} new URLs found for \"{query}...\"",
+    notifCaptcha: "CAPTCHA Detected",
+    notifCaptchaMsg: "Auto-next paused. Solve the CAPTCHA to continue.",
+    notifDone: "Dork File Collector — Done",
+    bgDownloading: "Downloading",
+    bgDone: "Done",
+    bgNothingToDownload: "Nothing to download",
+    unknown: "unknown",
+    urlsCount: "{n} URLs · {types} types",
   },
   id: {
+    // Options page
     settings: "Pengaturan",
     about: "Tentang",
     appearance: "Tampilan",
@@ -90,6 +209,123 @@ const I18N_MESSAGES = {
     description: "Deskripsi",
     version: "Versi",
     repository: "Repositori",
+
+    // Popup — header
+    appName: "Dofiltor",
+    appSubtitle: "Dork File Collector",
+    toggleExtension: "Toggle ekstensi",
+    extensionOn: "Ekstensi aktif",
+    extensionOff: "Ekstensi nonaktif",
+    themeToggle: "Tema",
+
+    // Popup — auto-next bar
+    autoNextOn: "Auto-next",
+    autoNextOff: "Auto-next",
+    max: "Maks",
+    pages: "hal",
+
+    // Popup — stats
+    statUrls: "URLs",
+    statValid: "Valid",
+    statDead: "Mati",
+    statTypes: "Tipe",
+
+    // Popup — toolbar
+    validate: "Validasi",
+    export: "Ekspor",
+    copyUrls: "Salin URL",
+    batchDownload: "Unduh massal",
+    scanHistory: "Riwayat",
+    settingsTooltip: "Pengaturan",
+    aboutTooltip: "Tentang",
+    removeDead: "Hapus mati",
+    clearAll: "Bersihkan",
+
+    // Popup — sort
+    sortBy: "Urutkan",
+    sortDesc: "Urut turun",
+    sortAsc: "Urut naik",
+    sortDate: "Tanggal",
+    sortSize: "Ukuran",
+    sortStatus: "Status",
+    sortDomain: "Domain",
+    sortType: "Tipe",
+
+    // Popup — export format
+    exportFormat: "Format ekspor",
+    formatCsv: "CSV",
+    formatTxt: "URL txt",
+    formatJson: "JSON",
+    formatDomainJson: "Domain JSON",
+
+    // Popup — search
+    searchPlaceholder: "Filter berdasarkan nama file atau domain...",
+    searchClear: "Hapus filter",
+
+    // Popup — captcha
+    captchaDetected: "CAPTCHA terdeteksi — auto-next dijeda",
+    captchaShow: "Lihat",
+
+    // Popup — empty state
+    emptyTitle: "Belum ada URL terkumpul",
+    emptyDesc: "Jalankan dork query di provider yang aktif.\nURL file yang cocok akan muncul otomatis.",
+
+    // Popup — footer
+    ready: "Siap",
+
+    // Popup — validation
+    checking: "Memeriksa",
+    of: "dari",
+    validating: "Memvalidasi...",
+
+    // Popup — status messages
+    statusValidDead: "{valid} valid, {dead} mati",
+    statusExported: "{count} diekspor sebagai {format}",
+    statusCopied: "{count} disalin",
+    statusCopiedFallback: "Disalin",
+    statusDownloading: "Mengunduh {done}/{total}",
+    statusDownloaded: "Terunduh {done}/{total}",
+    statusNothingToDownload: "Tidak ada yang diunduh",
+    statusRemovedOne: "1 URL dihapus",
+    statusRemovedDead: "{count} mati dihapus",
+    statusCleared: "{count} URL dibersihkan",
+    statusNoHistory: "Belum ada riwayat",
+    statusHistoryCleared: "Riwayat dibersihkan",
+    statusRestored: "Dipulihkan",
+    statusEnabled: "Ekstensi diaktifkan",
+    statusDisabled: "Ekstensi dinonaktifkan",
+    statusSaved: "Pengaturan disimpan",
+    statusPageOf: "Hal {page} → {next}",
+    statusStopped: "Berhenti",
+    statusDone: "Selesai",
+
+    // Popup — history
+    historyTitle: "Riwayat Scan ({count})",
+    historyClear: "Bersihkan",
+    historyBack: "Kembali ke URL",
+    historyUrlsPages: "{urls} URL · {pages} hal",
+
+    // Popup — misc
+    noMatching: "Tidak ada URL cocok",
+    allFilter: "Semua",
+    downloaded: "terunduh",
+    valid: "valid",
+    dead: "mati",
+    pending: "tertunda",
+    open: "Buka",
+    download: "Unduh",
+    undo: "Urungkan",
+
+    // Background — notifications
+    notifNewUrls: "{count} URL baru ditemukan untuk \"{query}...\"",
+    notifCaptcha: "CAPTCHA Terdeteksi",
+    notifCaptchaMsg: "Auto-next dijeda. Selesaikan CAPTCHA untuk melanjutkan.",
+    notifDone: "Dork File Collector — Selesai",
+    bgDownloading: "Mengunduh",
+    bgDone: "Selesai",
+    bgNothingToDownload: "Tidak ada yang diunduh",
+    unknown: "tidak diketahui",
+    urlsCount: "{n} URL · {tipe} tipe",
   },
 };
 
@@ -101,9 +337,15 @@ function setI18nLanguage(lang) {
   localStorage.setItem(I18N_STORAGE_KEY, I18N_MESSAGES[lang] ? lang : I18N_DEFAULT_LANG);
 }
 
-function t(key) {
+function t(key, replacements) {
   const lang = getI18nLanguage();
-  return I18N_MESSAGES[lang]?.[key] || I18N_MESSAGES[I18N_DEFAULT_LANG][key] || key;
+  let msg = I18N_MESSAGES[lang]?.[key] || I18N_MESSAGES[I18N_DEFAULT_LANG][key] || key;
+  if (replacements) {
+    for (const [k, v] of Object.entries(replacements)) {
+      msg = msg.replace("{" + k + "}", v);
+    }
+  }
+  return msg;
 }
 
 function applyI18n(root = document) {
@@ -112,5 +354,14 @@ function applyI18n(root = document) {
   });
   root.querySelectorAll("[data-i18n-title]").forEach((el) => {
     el.title = t(el.dataset.i18nTitle);
+  });
+  root.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
+    el.placeholder = t(el.dataset.i18nPlaceholder);
+  });
+  root.querySelectorAll("[data-i18n-aria]").forEach((el) => {
+    el.setAttribute("aria-label", t(el.dataset.i18nAria));
+  });
+  root.querySelectorAll("[data-i18n-tip]").forEach((el) => {
+    el.setAttribute("data-tip", t(el.dataset.i18nTip));
   });
 }

@@ -6,7 +6,7 @@
 <p align="center"><strong>Dork File Collector</strong></p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-3.4.3-blue">
+  <img alt="Version" src="https://img.shields.io/badge/version-3.4.4-blue">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
   <img alt="Manifest" src="https://img.shields.io/badge/manifest-v3-orange">
   <img alt="Chrome" src="https://img.shields.io/badge/chrome-%E2%89%A588-4285F4?logo=googlechrome&logoColor=white">
@@ -70,6 +70,18 @@
 4. Click **Load unpacked** and select the repo folder
 
 [![Download ZIP](https://img.shields.io/badge/download-.zip-333?style=flat-square&logo=github)](https://github.com/iamutaki/dofiltor/archive/refs/heads/main.zip)
+
+---
+
+## Translations
+
+Dofiltor currently supports **English** and **Bahasa Indonesia**. Want to add your language? Contributions are welcome!
+
+1. Copy `i18n.js` and add a new block under `I18N_MESSAGES` with your language code (e.g. `fr`, `de`, `ja`)
+2. Update `_locales/en/messages.json` for manifest strings
+3. Open a pull request
+
+All translatable strings are in one place — no digging through source files.
 
 ---
 

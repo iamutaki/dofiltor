@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.4.4
+
+- Removed browser-added fragments (`#:~:text=...`) from collected URLs to prevent open/download errors.
+
 ## 3.4.3
 
 - Added global on/off toggle to pause/resume the extension without disabling it in the browser. When toggled back on, automatically rescans the current page and resumes auto-next.

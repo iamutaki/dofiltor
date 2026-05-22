@@ -136,7 +136,7 @@ function updateStats() {
   $("batchBadge").textContent = batchable;
   $("batchBadge").style.display = batchable > 0 ? "block" : "none";
 
-  if (!validating) $("hSub").textContent = n ? n + " URLs \u00B7 " + types + " types" : "Dork File Collector";
+  if (!validating) $("hSub").textContent = n ? t("urlsCount", { n: String(n), types: String(types) }) : t("appSubtitle");
 }
 
 function matchSearch(item) {
@@ -318,7 +318,7 @@ function renderRow(item, viewIndex) {
   mt.appendChild(hostSpan);
   const statusChip = document.createElement("span");
   statusChip.className = "status-chip " + status;
-  statusChip.textContent = status === "ok" ? "valid" : status === "fail" ? "dead" : "pending";
+  statusChip.textContent = t(status === "ok" ? "valid" : status === "fail" ? "dead" : "pending");
   mt.appendChild(statusChip);
   if (item.size) {
     const sz = document.createElement("span");
@@ -329,7 +329,7 @@ function renderRow(item, viewIndex) {
   if (item.downloaded) {
     const dlTag = document.createElement("span");
     dlTag.className = "dl-tag";
-    dlTag.textContent = "downloaded";
+    dlTag.textContent = t("downloaded");
     mt.appendChild(dlTag);
   }
   info.appendChild(mt);
@@ -782,6 +782,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   applyTheme(loadTheme());
+  applyI18n();
   initTooltip();
 
   Promise.all([loadUrls(), loadSettings()]).then(([urls, loadedSettings]) => {
