@@ -8,11 +8,16 @@ A browser extension for collecting file URLs from configurable dork/search resul
 
 ![Main](images/main.png)
 
+<details>
+<summary>See more screenshots</summary>
+
 ![Settings](images/setting.png)
 
 ![Providers](images/provider.png)
 
 ![About](images/about.png)
+
+</details>
 
 ## Features
 
