@@ -86,6 +86,22 @@ All translatable strings are in one place — no digging through source files.
 
 ---
 
+## Packaging (maintainers)
+
+The signing key is **never** committed. `key.pem` is listed in `.gitignore` and must stay local only (or in the `EXTENSION_KEY` GitHub Actions secret for releases).
+
+```bash
+# Generate a key once (local only)
+openssl genrsa 2048 | openssl pkcs8 -topk8 -nocrypt -out key.pem
+
+chmod +x package.sh
+./package.sh
+```
+
+CI writes the secret to `$RUNNER_TEMP/extension-key.pem` and passes `DOFILTOR_PACK_KEY` so Chrome never sees a key file inside the extension folder.
+
+---
+
 ## License
 
 MIT - [iamutaki](https://github.com/iamutaki)
