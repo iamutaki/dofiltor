@@ -35,11 +35,18 @@ jobs:
           chmod +x package.sh
           xvfb-run --auto-servernum bash package.sh
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dofiltor
+          path: dofiltor.crx
+
       - name: Extract release notes
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
-          awk '/^## /{if(i++)exit}i{print}' changelogs.md > release-notes.md
+          awk '/^## /{if(i++)exit}i{print}' CHANGELOGS.md > release-notes.md
 
       - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: dofiltor.crx
