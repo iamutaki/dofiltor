@@ -91,6 +91,7 @@ try {
     if (contextDead) return;
     if (area === "local" && changes[SETTINGS_KEY]) {
       const wasAutoNext = settings.autoNext;
+      const wasEnabled = settings.enabled;
       settings = normalizeSettings({ ...settings, ...changes[SETTINGS_KEY].newValue });
       docPattern = buildDocPattern(settings.fileTypes);
 
@@ -110,9 +111,13 @@ try {
           message: "",
         });
       }
-    
-      if (changes[SETTINGS_KEY].newValue && changes[SETTINGS_KEY].newValue.enabled === true) {
+
+      if (wasEnabled === false && settings.enabled === true) {
+        console.log("[Dork File Collector] Extension re-enabled — rescanning page");
         scan();
+        if (settings.autoNext && !captchaDetected) {
+          scheduleAutoNext(settings.pageDelay);
+        }
       }
     }
   });
