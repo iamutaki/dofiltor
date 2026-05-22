@@ -1,0 +1,8 @@
+{
+  "extensionName": {
+    "message": "Dofiltor"
+  },
+  "extensionDescription": {
+    "message": "Kumpulkan URL file dari provider hasil dork/search yang dapat dikonfigurasi."
+  }
+}

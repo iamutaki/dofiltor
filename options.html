@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <title>Dofiltor Settings</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --page: #f8fafd;
+      --surface: #fff;
+      --text: #202124;
+      --subtle: #5f6368;
+      --line: #dadce0;
+      --control: #f1f3f4;
+      --blue: #1a73e8;
+      --danger: #d93025;
+    }
+    [data-theme="light"] {
+      color-scheme: light;
+      --page: #f8fafd;
+      --surface: #fff;
+      --text: #202124;
+      --subtle: #5f6368;
+      --line: #dadce0;
+      --control: #f1f3f4;
+      --blue: #1a73e8;
+      --danger: #d93025;
+    }
+    [data-theme="dark"] {
+      color-scheme: dark;
+      --page: #202124;
+      --surface: #292a2d;
+      --text: #e8eaed;
+      --subtle: #9aa0a6;
+      --line: #3c4043;
+      --control: #202124;
+      --blue: #8ab4f8;
+      --danger: #f28b82;
+    }
+    @media (prefers-color-scheme: dark) {
+      [data-theme="auto"] {
+        --page: #202124;
+        --surface: #292a2d;
+        --text: #e8eaed;
+        --subtle: #9aa0a6;
+        --line: #3c4043;
+        --control: #202124;
+        --blue: #8ab4f8;
+        --danger: #f28b82;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--page); color: var(--text);
+      font: 13px/1.45 "Segoe UI", Roboto, Arial, sans-serif;
+    }
+    header {
+      height: 64px; display: flex; align-items: center; gap: 16px;
+      padding: 0 24px; background: var(--surface); border-bottom: 1px solid var(--line);
+    }
+    header img { width: 32px; height: 32px; }
+    h1 { margin: 0; font-size: 20px; font-weight: 400; }
+    main { max-width: 900px; margin: 0 auto; padding: 24px; }
+    .nav {
+      display: flex; gap: 6px; margin-bottom: 18px; border-bottom: 1px solid var(--line);
+    }
+    .nav button {
+      border: 0; border-bottom: 2px solid transparent; background: transparent;
+      color: var(--subtle); padding: 12px 14px 10px; cursor: pointer; font: inherit;
+    }
+    .nav button.active { color: var(--blue); border-bottom-color: var(--blue); }
+    .section { display: none; }
+    .section.active { display: block; }
+    .card {
+      background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+      margin-bottom: 16px; overflow: hidden;
+    }
+    .card-title {
+      padding: 16px 20px 10px; font-size: 15px; font-weight: 500;
+    }
+    .row {
+      display: grid; grid-template-columns: minmax(190px, 280px) 1fr;
+      gap: 18px; padding: 14px 20px; border-top: 1px solid var(--line);
+      align-items: start;
+    }
+    .row:first-of-type { border-top: 0; }
+    .label { font-size: 13px; color: var(--text); }
+    .hint { margin-top: 3px; color: var(--subtle); font-size: 12px; }
+    textarea, input[type="text"], input[type="number"], select {
+      width: 100%; border: 1px solid var(--line); border-radius: 4px;
+      background: var(--control); color: var(--text); padding: 7px 8px; font: inherit;
+    }
+    textarea {
+      min-height: 116px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--blue); }
+    .provider {
+      border-top: 1px solid var(--line); padding: 14px 20px;
+      display: grid; grid-template-columns: minmax(190px, 280px) 1fr; gap: 18px;
+    }
+    .provider-head { display: flex; align-items: center; gap: 10px; }
+    .provider-name-text { font-weight: 500; }
+    .provider-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .field span {
+      display: block; color: var(--subtle); font-size: 12px; margin-bottom: 4px;
+    }
+    .actions {
+      display: flex; gap: 8px; align-items: center; padding: 14px 20px; border-top: 1px solid var(--line);
+    }
+    button.chrome {
+      border: 1px solid var(--line); border-radius: 4px; background: var(--surface);
+      color: var(--blue); min-height: 32px; padding: 6px 12px; cursor: pointer; font: inherit;
+    }
+    button.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+    button.danger { color: var(--danger); }
+    .status { color: var(--subtle); min-height: 18px; margin-left: 6px; }
+    .about-row {
+      display: grid; grid-template-columns: 180px 1fr; gap: 18px;
+      padding: 14px 20px; border-top: 1px solid var(--line);
+    }
+    .about-row:first-of-type { border-top: 0; }
+    .about-label { color: var(--subtle); }
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    @media (max-width: 720px) {
+      main { padding: 16px; }
+      .row, .provider, .about-row { grid-template-columns: 1fr; gap: 8px; }
+      .provider-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="icons/icon128.png" alt="">
+    <h1>Dofiltor</h1>
+  </header>
+
+  <main>
+    <nav class="nav">
+      <button id="tabSettings" type="button">Settings</button>
+      <button id="tabAbout" type="button">About</button>
+    </nav>
+
+    <section class="section" id="settingsSection">
+      <div class="card">
+        <div class="card-title">Appearance</div>
+        <div class="row">
+          <div>
+            <div class="label">Theme</div>
+            <div class="hint">Applies to the popup, settings, and about page.</div>
+          </div>
+          <select id="themeSelect">
+            <option value="auto" data-i18n="auto">Auto</option>
+            <option value="light" data-i18n="light">Light</option>
+            <option value="dark" data-i18n="dark">Dark</option>
+          </select>
+        </div>
+        <div class="row">
+          <div>
+            <div class="label" data-i18n="language">Language</div>
+            <div class="hint" data-i18n="languageHint">Controls extension UI text where translations are available.</div>
+          </div>
+          <select id="languageSelect">
+            <option value="en">English</option>
+            <option value="id">Bahasa Indonesia</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Automation</div>
+        <div class="row">
+          <div>
+            <div class="label">Auto-next</div>
+            <div class="hint">Move through result pages automatically when the provider supports it.</div>
+          </div>
+          <label class="provider-head"><input type="checkbox" id="autoNext"> Enabled</label>
+        </div>
+        <div class="row">
+          <div>
+            <div class="label">Max pages</div>
+            <div class="hint">Stop after this many result pages.</div>
+          </div>
+          <input type="number" id="maxPages" min="1" max="200" value="50">
+        </div>
+        <div class="row">
+          <div>
+            <div class="label">Page delay</div>
+            <div class="hint">Delay before moving to the next page.</div>
+          </div>
+          <input type="number" id="pageDelay" min="500" step="500" value="3000">
+        </div>
+        <div class="row">
+          <div>
+            <div class="label">Auto-validate</div>
+            <div class="hint">Validate newly collected file URLs in the background.</div>
+          </div>
+          <label class="provider-head"><input type="checkbox" id="autoValidate"> Enabled</label>
+        </div>
+        <div class="row">
+          <div>
+            <div class="label">Validation delay</div>
+            <div class="hint">Wait between background validation requests.</div>
+          </div>
+          <input type="number" id="validateDelay" min="0" step="500" value="1500">
+        </div>
+        <div class="row">
+          <div>
+            <div class="label">Notifications</div>
+            <div class="hint">Show collection, CAPTCHA, and completion notifications.</div>
+          </div>
+          <label class="provider-head"><input type="checkbox" id="notifications"> Enabled</label>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Capture</div>
+        <div class="row">
+          <div>
+            <div class="label">File extensions</div>
+            <div class="hint">One extension per line or comma-separated.</div>
+          </div>
+          <textarea id="fileTypes" spellcheck="false"></textarea>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Providers</div>
+        <div id="providers"></div>
+        <div class="actions">
+          <button class="chrome" id="addProvider" type="button">Add provider</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="actions">
+          <button class="chrome primary" id="save" type="button">Save</button>
+          <button class="chrome danger" id="reset" type="button">Reset defaults</button>
+          <span class="status" id="status"></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="aboutSection">
+      <div class="card">
+        <div class="card-title">About</div>
+        <div class="about-row"><div class="about-label">Name</div><div>Dofiltor</div></div>
+        <div class="about-row"><div class="about-label">Description</div><div>Dork File Collector</div></div>
+        <div class="about-row"><div class="about-label">Version</div><div id="version">3.4.1</div></div>
+        <div class="about-row"><div class="about-label">Repository</div><div><a href="https://github.com/iamutaki/dofiltor" target="_blank" rel="noreferrer">iamutaki/dofiltor</a></div></div>
+      </div>
+    </section>
+  </main>
+  <script src="i18n.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

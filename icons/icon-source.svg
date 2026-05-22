@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Dofiltor icon">
+  <circle cx="64" cy="64" r="62" fill="#233331"/>
+  <circle cx="64" cy="64" r="50" fill="#7bc7bd"/>
+  <path fill="#233331" d="M34 34h35c17 0 28 12 28 30S86 94 69 94H34V34Zm18 16v28h16c7 0 12-5 12-14S75 50 68 50H52Z"/>
+  <path fill="#233331" d="M76 30h24v14H76zM82 84h26v14H82z"/>
+</svg>

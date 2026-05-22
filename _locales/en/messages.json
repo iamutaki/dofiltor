@@ -1,0 +1,8 @@
+{
+  "extensionName": {
+    "message": "Dofiltor"
+  },
+  "extensionDescription": {
+    "message": "Collect file URLs from configurable dork/search result providers."
+  }
+}
