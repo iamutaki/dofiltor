@@ -1,30 +1,36 @@
 # Dofiltor — Dork File Collector
 
-Browser extension untuk mengumpulkan file URL dari hasil dork/search provider yang dapat dikonfigurasi.
+A browser extension for collecting file URLs from configurable dork/search result providers.
 
 ![Version](https://img.shields.io/badge/version-3.4.1-blue)
 
-## Fitur
+## Screenshots
 
-- **Multi-provider** — dukung berbagai provider dork/search dengan preset bawaan dan aturan host kustom
-- **Capture extensions** — tentukan sendiri ekstensi file yang ingin dikumpulkan
-- **Batch download** — unduh banyak file sekaligus
-- **Validasi baris** — indikator status `valid`, `dead`, dan `pending` per baris
-- **Otomasi** — auto-next, max pages, page delay, auto-validation, validation delay
-- **Tema** — tema terang/gelap, disinkronkan antara popup dan halaman Settings
-- **Multi-bahasa** — English dan Bahasa Indonesia
+![Main](images/main.png)
 
-## Instalasi
+![Settings](images/setting.png)
 
-1. Clone atau download repo ini
-2. Buka `chrome://extensions` (atau browser Chromium-based)
-3. Aktifkan **Developer mode**
-4. Klik **Load unpacked** dan pilih folder repo ini
+![Providers](images/provider.png)
 
-## Tangkapan Layar
+![About](images/about.png)
 
-<!-- TODO: tambahkan gambar -->
+## Features
 
-## Lisensi
+- **Multi-provider** — support multiple dork/search providers with built-in presets and custom host rules
+- **Capture extensions** — configure which file extensions to collect
+- **Batch download** — download multiple files at once
+- **Row validation** — per-row status indicators: `valid`, `dead`, and `pending`
+- **Automation** — auto-next, max pages, page delay, auto-validation, validation delay
+- **Theme** — light/dark theme synced between popup and Settings
+- **Multi-language** — English and Bahasa Indonesia
+
+## Installation
+
+1. Clone or download this repo
+2. Go to `chrome://extensions` (or any Chromium-based browser)
+3. Enable **Developer mode**
+4. Click **Load unpacked** and select the repo folder
+
+## License
 
 MIT
