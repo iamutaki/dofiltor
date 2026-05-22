@@ -162,10 +162,12 @@ async function resetDefaults() {
 
 document.addEventListener("DOMContentLoaded", async () => {
   applyTheme(loadTheme());
+  await initI18n();
   $("languageSelect").value = getI18nLanguage();
-  $("languageSelect").addEventListener("change", () => {
-    setI18nLanguage($("languageSelect").value);
+  $("languageSelect").addEventListener("change", async () => {
+    await setI18nLanguage($("languageSelect").value);
     localizeOptions();
+    applyI18n();
   });
   $("tabSettings").addEventListener("click", () => setTab("settings"));
   $("tabAbout").addEventListener("click", () => setTab("about"));
@@ -195,6 +197,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     ? chrome.runtime.getManifest().version
     : "3.4.6";
   renderProviders();
+  applyI18n();
   localizeOptions();
   setTab(location.hash.startsWith("#about") ? "about" : "settings");
 });

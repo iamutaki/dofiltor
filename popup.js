@@ -729,7 +729,7 @@ function initTooltip() {
   });
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   $("themeToggle").addEventListener("click", cycleTheme);
   $("pwrToggle").addEventListener("click", togglePower);
   $("btnValidate").addEventListener("click", startValidate);
@@ -795,6 +795,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   applyTheme(loadTheme());
+  await initI18n();
   applyI18n();
   applyAppVersion();
   initTooltip();

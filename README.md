@@ -78,29 +78,14 @@
 
 ## Translations
 
-Dofiltor currently supports **English** and **Bahasa Indonesia**. Want to add your language? Contributions are welcome!
+Dofiltor supports **English** and **Bahasa Indonesia**. To add a language, see [**_locales/README.md**](_locales/README.md).
 
-1. Copy `i18n.js` and add a new block under `I18N_MESSAGES` with your language code (e.g. `fr`, `de`, `ja`)
-2. Update `_locales/en/messages.json` for manifest strings
-3. Open a pull request
+1. Copy `_locales/en/ui.json` → `_locales/<code>/ui.json` and translate values (keep keys).
+2. Add `_locales/<code>/messages.json` for the extension name/description.
+3. Register the code in `I18N_SUPPORTED` inside `i18n.js` and add it to the language list in `options.html`.
+4. Run `node scripts/check-locales.mjs` before opening a PR.
 
-All translatable strings are in one place — no digging through source files.
-
----
-
-## Packaging (maintainers)
-
-The signing key is **never** committed. `key.pem` is listed in `.gitignore` and must stay local only (or in the `EXTENSION_KEY` GitHub Actions secret for releases).
-
-```bash
-# Generate a key once (local only)
-openssl genrsa 2048 | openssl pkcs8 -topk8 -nocrypt -out key.pem
-
-chmod +x package.sh
-./package.sh
-```
-
-CI writes the secret to `$RUNNER_TEMP/extension-key.pem` and passes `DOFILTOR_PACK_KEY` so Chrome never sees a key file inside the extension folder.
+Only the active locale (plus English fallback) is loaded at runtime — not every language at once.
 
 ---
 

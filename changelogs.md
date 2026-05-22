@@ -2,6 +2,7 @@
 
 ## 3.4.6
 
+- Split UI translations into per-locale `_locales/<lang>/ui.json` files with lazy loading; see `_locales/README.md` for contributors.
 - Show extension version (`vX.Y.Z`) next to the app name in the popup header.
 - Fixed horizontal scrolling on the domain filter bar when many domains are listed (trackpad/wheel and drag).
 - Release workflow keeps the signing key outside the extension folder so Chrome CRX packaging succeeds in CI.
