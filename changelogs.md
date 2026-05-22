@@ -2,7 +2,7 @@
 
 ## 3.4.3
 
-- Added global on/off toggle to pause/resume the extension without disabling it in the browser.
+- Added global on/off toggle to pause/resume the extension without disabling it in the browser. When toggled back on, automatically rescans the current page and resumes auto-next.
 - Simplified README: cleaner layout, clearer installation steps, fewer icons.
 
 ## 3.4.2
