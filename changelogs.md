@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.4.2
+
+- Fixed Bing search result URL extraction by decoding base64 `u` parameter from `/ck/a` redirect URLs.
+- Fixed popup row layout: prevented metadata (status chip, size) from wrapping into multiple lines.
+
 ## 3.4.1
 
 - Enlarged the extension icon circle to use more of the available canvas.

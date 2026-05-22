@@ -2,7 +2,7 @@
 
 A browser extension for collecting file URLs from configurable dork/search result providers.
 
-![Version](https://img.shields.io/badge/version-3.4.1-blue)
+![Version](https://img.shields.io/badge/version-3.4.2-blue)
 
 ## Screenshots
 
