@@ -15,7 +15,9 @@ jobs:
 
       - name: Setup key
         run: |
-          echo "${{ secrets.EXTENSION_KEY }}" | base64 -d > key.pem
+          cat > key.pem << '!!EOF!!'
+${{ secrets.EXTENSION_KEY }}
+!!EOF!!
           chmod 600 key.pem
 
       - name: Install Chrome + xvfb
