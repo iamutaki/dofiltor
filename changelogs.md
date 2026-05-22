@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.4.6
+
+- Show extension version (`vX.Y.Z`) next to the app name in the popup header.
+- Fixed horizontal scrolling on the domain filter bar when many domains are listed (trackpad/wheel and drag).
+- Release workflow keeps the signing key outside the extension folder so Chrome CRX packaging succeeds in CI.
+
 ## 3.4.5
 
 - activate workflow build

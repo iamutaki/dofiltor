@@ -69,7 +69,15 @@
       display: block; border-radius: 50%;
     }
     .header-info { flex: 1; min-width: 0; }
-    .header-info h1 { font-size: 13px; font-weight: 500; line-height: 1.2; }
+    .header-info h1 {
+      font-size: 13px; font-weight: 500; line-height: 1.2;
+      display: flex; align-items: baseline; gap: 6px; min-width: 0;
+    }
+    .header-info h1 .app-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .header-info .app-ver {
+      font-size: 10px; font-weight: 400; color: var(--c-text-3);
+      flex-shrink: 0; font-variant-numeric: tabular-nums;
+    }
     .header-info p { font-size: 10px; color: var(--c-text-2); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .pwr-btn {
       width: 28px; height: 28px; border: none; border-radius: 50%;
@@ -222,16 +230,22 @@
     .domain-bar {
       padding: 5px 8px; border-bottom: 1px solid var(--c-border);
       flex-shrink: 0; display: none; align-items: center; gap: 3px;
-      overflow-x: auto; overflow-y: hidden; font-size: 10px;
-      scrollbar-width: none; scroll-behavior: smooth;
+      min-width: 0; width: 100%; max-width: 100%;
+      flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden;
+      font-size: 10px; scroll-behavior: smooth;
+      -webkit-overflow-scrolling: touch; touch-action: pan-x;
+      scrollbar-width: thin; scrollbar-color: var(--c-border) transparent;
     }
-    .domain-bar::-webkit-scrollbar { display: none; }
+    .domain-bar::-webkit-scrollbar { height: 4px; }
+    .domain-bar::-webkit-scrollbar-thumb {
+      background: var(--c-border); border-radius: 2px;
+    }
     .domain-bar.show { display: flex; }
     .dtag {
-      padding: 3px 8px; border-radius: 999px; font-size: 10px;
+      flex-shrink: 0; padding: 3px 8px; border-radius: 999px; font-size: 10px;
       background: var(--c-bg-hover); color: var(--c-text-2);
       white-space: nowrap; cursor: pointer; border: 1px solid var(--c-border);
-      transition: all 0.1s;
+      transition: all 0.1s; font-family: inherit;
     }
     .dtag:hover { border-color: var(--c-blue); color: var(--c-blue); }
     .dtag.active { background: var(--c-blue-bg); color: var(--c-blue); border-color: var(--c-blue); }
@@ -370,7 +384,7 @@
   <div class="header">
     <img class="logo" src="icons/icon48.png" alt="">
     <div class="header-info">
-      <h1 data-i18n="appName">Dofiltor</h1>
+      <h1><span class="app-name" data-i18n="appName">Dofiltor</span><span class="app-ver" id="appVer"></span></h1>
       <p id="hSub" data-i18n="appSubtitle">Dork File Collector</p>
     </div>
     <button class="pwr-btn on" id="pwrToggle" data-tip="Toggle extension" data-i18n-tip="toggleExtension" data-i18n-aria="toggleExtension">
@@ -489,6 +503,6 @@
   </div>
 
   <script src="i18n.js"></script>
-  <script src="popup.js?v=3.3.3"></script>
+  <script src="popup.js?v=3.4.6"></script>
 </body>
 </html>

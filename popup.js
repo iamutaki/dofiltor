@@ -48,6 +48,12 @@ const SVG = {
 };
 
 function $(id) { return document.getElementById(id); }
+
+function applyAppVersion() {
+  const v = typeof chrome !== "undefined" && chrome.runtime?.getManifest?.()?.version;
+  const el = $("appVer");
+  if (el) el.textContent = v ? "v" + v : "";
+}
 function hasChromeStorage() { return typeof chrome !== "undefined" && chrome.storage && chrome.storage.local; }
 function hasChromeRuntime() { return typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.sendMessage; }
 function hasChromeTabs() { return typeof chrome !== "undefined" && chrome.tabs && chrome.windows; }
@@ -748,6 +754,13 @@ document.addEventListener("DOMContentLoaded", () => {
   $("maxPages").addEventListener("change", syncSettings);
   $("autoNextBtn").addEventListener("click", toggleAutoNext);
   $("urlList").addEventListener("scroll", scheduleRenderList);
+  $("domainBar").addEventListener("wheel", (e) => {
+    const bar = $("domainBar");
+    if (!bar.classList.contains("show") || bar.scrollWidth <= bar.clientWidth) return;
+    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+    e.preventDefault();
+    bar.scrollLeft += e.deltaY;
+  }, { passive: false });
   document.addEventListener("keydown", onKeyboard);
 
   $("captchaShow").addEventListener("click", () => {
@@ -783,6 +796,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   applyTheme(loadTheme());
   applyI18n();
+  applyAppVersion();
   initTooltip();
 
   Promise.all([loadUrls(), loadSettings()]).then(([urls, loadedSettings]) => {

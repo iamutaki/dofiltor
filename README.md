@@ -6,7 +6,7 @@
 <p align="center"><strong>Dork File Collector</strong></p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-3.4.4-blue">
+  <img alt="Version" src="https://img.shields.io/badge/version-3.4.6-blue">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
   <img alt="Manifest" src="https://img.shields.io/badge/manifest-v3-orange">
   <img alt="Chrome" src="https://img.shields.io/badge/chrome-%E2%89%A588-4285F4?logo=googlechrome&logoColor=white">
@@ -54,7 +54,7 @@
 
 **Option A - CRX (recommended)**
 
-1. Download the `.crx` file from [latest release](https://github.com/iamutaki/dofiltor/releases/latest/download/dofiltor.crx)
+1. Download the `.crx` file from the [latest release](https://github.com/iamutaki/dofiltor/releases/latest) (always points to the newest tag)
 2. Open `chrome://extensions` in your browser
 3. Drag and drop the `.crx` file onto the page
 
@@ -62,15 +62,17 @@
 
 **Option B - Load unpacked**
 
-1. Clone or [download ZIP](https://github.com/iamutaki/dofiltor/archive/refs/heads/main.zip)
+1. Clone or download **Source code (zip)** from the [latest release](https://github.com/iamutaki/dofiltor/releases/latest)
    ```bash
    git clone https://github.com/iamutaki/dofiltor.git
+   cd dofiltor
+   git checkout "$(git describe --tags --abbrev=0)"
    ```
 2. Open `chrome://extensions` in your browser
 3. Enable **Developer mode** (toggle in top-right)
 4. Click **Load unpacked** and select the repo folder
 
-[![Download ZIP](https://img.shields.io/badge/download-.zip-333?style=flat-square&logo=github)](https://github.com/iamutaki/dofiltor/archive/refs/heads/main.zip)
+[![Download ZIP](https://img.shields.io/badge/download-.zip-333?style=flat-square&logo=github)](https://github.com/iamutaki/dofiltor/releases/latest)
 
 ---
 

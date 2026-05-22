@@ -193,7 +193,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("fileTypes").value = settings.fileTypes.join("\n");
   $("version").textContent = typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.getManifest
     ? chrome.runtime.getManifest().version
-    : "3.4.1";
+    : "3.4.6";
   renderProviders();
   localizeOptions();
   setTab(location.hash.startsWith("#about") ? "about" : "settings");
