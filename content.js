@@ -229,6 +229,17 @@ function extractUrls() {
           break;
         }
       }
+    } else if (href.includes("/ck/a") && href.includes("bing.com")) {
+      try {
+        const parsed = new URL(href);
+        const u = parsed.searchParams.get("u");
+        if (u) {
+          let b64 = u.startsWith("a1") ? u.substring(2) : u;
+          b64 = b64.replace(/-/g, "+").replace(/_/g, "/");
+          while (b64.length % 4) b64 += "=";
+          actualUrl = atob(b64);
+        }
+      } catch (e) { /* ignore */ }
     } else if (href.startsWith("http") && !isProviderUrl(href)) {
       actualUrl = href;
     }
