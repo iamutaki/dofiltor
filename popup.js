@@ -9,6 +9,7 @@ const DEFAULT_SETTINGS = {
   autoValidate: true,
   validateDelay: 1500,
   notifications: true,
+  enabled: true,
   fileTypes: [
     "pdf", "xls", "xlsx", "doc", "docx", "txt", "csv",
     "ppt", "pptx", "odt", "ods", "rtf",
@@ -29,6 +30,7 @@ let searchQuery = "";
 let validating = false;
 let autoNextEnabled = false;
 let settings = { ...DEFAULT_SETTINGS };
+let extensionEnabled = true;
 let sortKey = localStorage.getItem("dofiltor_sort_key") || "date";
 let sortDir = localStorage.getItem("dofiltor_sort_dir") || "desc";
 let exportFormat = localStorage.getItem("dofiltor_export_format") || "csv";
@@ -595,6 +597,19 @@ function toggleSortDir() {
   renderSortUI();
   renderList();
 }
+function updatePowerUI(enabled) {
+  extensionEnabled = enabled;
+  const btn = $("pwrToggle");
+  btn.className = "pwr-btn " + (enabled ? "on" : "off");
+  btn.setAttribute("aria-label", enabled ? "Extension on — click to disable" : "Extension off — click to enable");
+  btn.setAttribute("data-tip", enabled ? "Extension on" : "Extension off");
+}
+async function togglePower() {
+  extensionEnabled = !extensionEnabled;
+  await saveSettings({ ...settings, enabled: extensionEnabled });
+  updatePowerUI(extensionEnabled);
+  setStatus(extensionEnabled ? "Extension enabled" : "Extension disabled");
+}
 function toggleSettingsPanel() {
   openExtensionPage("options.html");
 }
@@ -710,6 +725,7 @@ function initTooltip() {
 
 document.addEventListener("DOMContentLoaded", () => {
   $("themeToggle").addEventListener("click", cycleTheme);
+  $("pwrToggle").addEventListener("click", togglePower);
   $("btnValidate").addEventListener("click", startValidate);
   $("btnExport").addEventListener("click", exportCurrent);
   $("btnCopy").addEventListener("click", copyUrls);
@@ -771,6 +787,8 @@ document.addEventListener("DOMContentLoaded", () => {
   Promise.all([loadUrls(), loadSettings()]).then(([urls, loadedSettings]) => {
     allUrls = urls;
     settings = loadedSettings;
+    extensionEnabled = settings.enabled !== undefined ? settings.enabled : true;
+    updatePowerUI(extensionEnabled);
     autoNextEnabled = settings.autoNext;
     $("maxPages").value = settings.maxPages;
     $("pageDelay").value = settings.pageDelay;

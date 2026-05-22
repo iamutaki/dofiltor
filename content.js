@@ -24,6 +24,7 @@ let settings = {
   autoValidate: true,
   validateDelay: 1500,
   notifications: true,
+  enabled: true,
   fileTypes: DEFAULT_FILE_TYPES,
   providers: DEFAULT_PROVIDERS,
 };
@@ -108,6 +109,10 @@ try {
           page: getPageNumber(),
           message: "",
         });
+      }
+    
+      if (changes[SETTINGS_KEY].newValue && changes[SETTINGS_KEY].newValue.enabled === true) {
+        scan();
       }
     }
   });
@@ -270,6 +275,7 @@ function extractUrls() {
 
 function scan() {
   if (contextDead) return;
+  if (!settings.enabled) return;
   if (!getActiveProvider()) return;
 
   if (detectCaptcha()) {
@@ -343,6 +349,7 @@ function scan() {
 
 function scheduleAutoNext(delay) {
   if (contextDead || !settings.autoNext || captchaDetected) return;
+  if (!settings.enabled) return;
 
   clearTimeout(nextTimer);
   const page = getPageNumber();

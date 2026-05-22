@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.4.3
+
+- Added global on/off toggle to pause/resume the extension without disabling it in the browser.
+- Simplified README: cleaner layout, clearer installation steps, fewer icons.
+
 ## 3.4.2
 
 - Fixed Bing search result URL extraction by decoding base64 `u` parameter from `/ck/a` redirect URLs.

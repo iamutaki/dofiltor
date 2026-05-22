@@ -71,6 +71,16 @@
     .header-info { flex: 1; min-width: 0; }
     .header-info h1 { font-size: 13px; font-weight: 500; line-height: 1.2; }
     .header-info p { font-size: 10px; color: var(--c-text-2); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pwr-btn {
+      width: 28px; height: 28px; border: none; border-radius: 50%;
+      background: transparent; color: var(--c-text-2); cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.1s, color 0.1s; flex-shrink: 0; padding: 0;
+    }
+    .pwr-btn:hover, .pwr-btn:focus-visible { background: var(--c-bg-hover); outline: 1px solid var(--c-blue); outline-offset: 1px; }
+    .pwr-btn.on { color: var(--c-green); }
+    .pwr-btn.off { color: var(--c-red); }
+    .pwr-btn svg { width: 17px; height: 17px; fill: currentColor; }
 
     /* ── Auto-next control bar ── */
     .auto-bar {
@@ -363,6 +373,9 @@
       <h1>Dofiltor</h1>
       <p id="hSub">Dork File Collector</p>
     </div>
+    <button class="pwr-btn on" id="pwrToggle" data-tip="Toggle extension" aria-label="Toggle extension">
+      <svg id="pwrIcon" viewBox="0 0 24 24"><path d="M13 3h-2v10h2V3zm4.83 2.17l-1.42 1.42C17.99 7.86 19 9.81 19 12c0 3.87-3.13 7-7 7s-7-3.13-7-7c0-2.19 1.01-4.14 2.59-5.42L6.17 5.17C4.23 6.82 3 9.26 3 12c0 4.97 4.03 9 9 9s9-4.03 9-9c0-2.74-1.23-5.18-3.17-6.83z"/></svg>
+    </button>
     <button class="ib" id="themeToggle" data-tip="Theme" aria-label="Theme">
       <svg id="themeIcon" viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/></svg>
       <span class="badge" id="themeLbl">A</span>

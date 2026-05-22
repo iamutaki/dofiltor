@@ -22,6 +22,7 @@ const DEFAULT_SETTINGS = {
   autoValidate: true,
   validateDelay: 1500,
   notifications: true,
+  enabled: true,
   fileTypes: DEFAULT_FILE_TYPES,
   providers: DEFAULT_PROVIDERS,
 };
@@ -245,7 +246,9 @@ try {
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === "ADD_URLS") {
-    addUrls(msg.urls).then((result) => {
+    getSettings().then((stg) => {
+      if (!stg.enabled) { sendResponse({ added: 0, total: 0, new_urls: [] }); return; }
+      addUrls(msg.urls).then((result) => {
       if (result.added > 0) {
         chrome.action.setBadgeText({ text: String(result.total) });
         chrome.action.setBadgeBackgroundColor({ color: "#2563eb" });
@@ -271,6 +274,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         }
       }
       sendResponse(result);
+    });
     });
     return true;
   }
