@@ -47,7 +47,7 @@ const I18N_MESSAGES = {
     version: "Version",
     repository: "Repository",
 
-    // Popup — header
+    // Popup - header
     appName: "Dofiltor",
     appSubtitle: "Dork File Collector",
     toggleExtension: "Toggle extension",
@@ -55,19 +55,19 @@ const I18N_MESSAGES = {
     extensionOff: "Extension off",
     themeToggle: "Theme",
 
-    // Popup — auto-next bar
+    // Popup - auto-next bar
     autoNextOn: "Auto-next",
     autoNextOff: "Auto-next",
     max: "Max",
     pages: "pages",
 
-    // Popup — stats
+    // Popup - stats
     statUrls: "URLs",
     statValid: "Valid",
     statDead: "Dead",
     statTypes: "Types",
 
-    // Popup — toolbar
+    // Popup - toolbar
     validate: "Validate",
     export: "Export",
     copyUrls: "Copy URLs",
@@ -78,7 +78,7 @@ const I18N_MESSAGES = {
     removeDead: "Remove dead",
     clearAll: "Clear all",
 
-    // Popup — sort
+    // Popup - sort
     sortBy: "Sort by",
     sortDesc: "Sort descending",
     sortAsc: "Sort ascending",
@@ -88,34 +88,34 @@ const I18N_MESSAGES = {
     sortDomain: "Domain",
     sortType: "Type",
 
-    // Popup — export format
+    // Popup - export format
     exportFormat: "Export format",
     formatCsv: "CSV",
     formatTxt: "URL txt",
     formatJson: "JSON",
     formatDomainJson: "Domain JSON",
 
-    // Popup — search
+    // Popup - search
     searchPlaceholder: "Filter by filename or domain...",
     searchClear: "Clear search",
 
-    // Popup — captcha
-    captchaDetected: "CAPTCHA detected — auto-next paused",
+    // Popup - captcha
+    captchaDetected: "CAPTCHA detected - auto-next paused",
     captchaShow: "Show",
 
-    // Popup — empty state
+    // Popup - empty state
     emptyTitle: "No URLs collected yet",
     emptyDesc: "Run a dork query on any enabled provider.\nMatching file URLs appear here automatically.",
 
-    // Popup — footer
+    // Popup - footer
     ready: "Ready",
 
-    // Popup — validation
+    // Popup - validation
     checking: "Checking",
     of: "of",
     validating: "Validating...",
 
-    // Popup — status messages
+    // Popup - status messages
     statusValidDead: "{valid} valid, {dead} dead",
     statusExported: "Exported {count} as {format}",
     statusCopied: "Copied {count}",
@@ -136,13 +136,13 @@ const I18N_MESSAGES = {
     statusStopped: "Stopped",
     statusDone: "Done",
 
-    // Popup — history
+    // Popup - history
     historyTitle: "Scan History ({count})",
     historyClear: "Clear",
     historyBack: "Back to URLs",
     historyUrlsPages: "{urls} URLs · {pages} pages",
 
-    // Popup — misc
+    // Popup - misc
     noMatching: "No matching URLs",
     allFilter: "All",
     downloaded: "downloaded",
@@ -153,11 +153,11 @@ const I18N_MESSAGES = {
     download: "Download",
     undo: "Undo",
 
-    // Background — notifications
+    // Background - notifications
     notifNewUrls: "{count} new URLs found for \"{query}...\"",
     notifCaptcha: "CAPTCHA Detected",
     notifCaptchaMsg: "Auto-next paused. Solve the CAPTCHA to continue.",
-    notifDone: "Dork File Collector — Done",
+    notifDone: "Dork File Collector - Done",
     bgDownloading: "Downloading",
     bgDone: "Done",
     bgNothingToDownload: "Nothing to download",
@@ -210,7 +210,7 @@ const I18N_MESSAGES = {
     version: "Versi",
     repository: "Repositori",
 
-    // Popup — header
+    // Popup - header
     appName: "Dofiltor",
     appSubtitle: "Dork File Collector",
     toggleExtension: "Toggle ekstensi",
@@ -218,19 +218,19 @@ const I18N_MESSAGES = {
     extensionOff: "Ekstensi nonaktif",
     themeToggle: "Tema",
 
-    // Popup — auto-next bar
+    // Popup - auto-next bar
     autoNextOn: "Auto-next",
     autoNextOff: "Auto-next",
     max: "Maks",
     pages: "hal",
 
-    // Popup — stats
+    // Popup - stats
     statUrls: "URLs",
     statValid: "Valid",
     statDead: "Mati",
     statTypes: "Tipe",
 
-    // Popup — toolbar
+    // Popup - toolbar
     validate: "Validasi",
     export: "Ekspor",
     copyUrls: "Salin URL",
@@ -241,7 +241,7 @@ const I18N_MESSAGES = {
     removeDead: "Hapus mati",
     clearAll: "Bersihkan",
 
-    // Popup — sort
+    // Popup - sort
     sortBy: "Urutkan",
     sortDesc: "Urut turun",
     sortAsc: "Urut naik",
@@ -251,34 +251,34 @@ const I18N_MESSAGES = {
     sortDomain: "Domain",
     sortType: "Tipe",
 
-    // Popup — export format
+    // Popup - export format
     exportFormat: "Format ekspor",
     formatCsv: "CSV",
     formatTxt: "URL txt",
     formatJson: "JSON",
     formatDomainJson: "Domain JSON",
 
-    // Popup — search
+    // Popup - search
     searchPlaceholder: "Filter berdasarkan nama file atau domain...",
     searchClear: "Hapus filter",
 
-    // Popup — captcha
-    captchaDetected: "CAPTCHA terdeteksi — auto-next dijeda",
+    // Popup - captcha
+    captchaDetected: "CAPTCHA terdeteksi - auto-next dijeda",
     captchaShow: "Lihat",
 
-    // Popup — empty state
+    // Popup - empty state
     emptyTitle: "Belum ada URL terkumpul",
     emptyDesc: "Jalankan dork query di provider yang aktif.\nURL file yang cocok akan muncul otomatis.",
 
-    // Popup — footer
+    // Popup - footer
     ready: "Siap",
 
-    // Popup — validation
+    // Popup - validation
     checking: "Memeriksa",
     of: "dari",
     validating: "Memvalidasi...",
 
-    // Popup — status messages
+    // Popup - status messages
     statusValidDead: "{valid} valid, {dead} mati",
     statusExported: "{count} diekspor sebagai {format}",
     statusCopied: "{count} disalin",
@@ -299,13 +299,13 @@ const I18N_MESSAGES = {
     statusStopped: "Berhenti",
     statusDone: "Selesai",
 
-    // Popup — history
+    // Popup - history
     historyTitle: "Riwayat Scan ({count})",
     historyClear: "Bersihkan",
     historyBack: "Kembali ke URL",
     historyUrlsPages: "{urls} URL · {pages} hal",
 
-    // Popup — misc
+    // Popup - misc
     noMatching: "Tidak ada URL cocok",
     allFilter: "Semua",
     downloaded: "terunduh",
@@ -316,11 +316,11 @@ const I18N_MESSAGES = {
     download: "Unduh",
     undo: "Urungkan",
 
-    // Background — notifications
+    // Background - notifications
     notifNewUrls: "{count} URL baru ditemukan untuk \"{query}...\"",
     notifCaptcha: "CAPTCHA Terdeteksi",
     notifCaptchaMsg: "Auto-next dijeda. Selesaikan CAPTCHA untuk melanjutkan.",
-    notifDone: "Dork File Collector — Selesai",
+    notifDone: "Dork File Collector - Selesai",
     bgDownloading: "Mengunduh",
     bgDone: "Selesai",
     bgNothingToDownload: "Tidak ada yang diunduh",

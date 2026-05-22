@@ -10,6 +10,7 @@
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
   <img alt="Manifest" src="https://img.shields.io/badge/manifest-v3-orange">
   <img alt="Chrome" src="https://img.shields.io/badge/chrome-%E2%89%A588-4285F4?logo=googlechrome&logoColor=white">
+  <img alt="GitHub Release" src="https://img.shields.io/github/v/release/iamutaki/dofiltor?logo=github">
 </p>
 
 <p align="center">A browser extension for collecting file URLs from configurable dork/search result providers.</p>

@@ -1,0 +1,34 @@
+name: Release
+
+on:
+  push:
+    tags: [ "v*" ]
+
+permissions:
+  contents: write
+
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Chromium
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq chromium-browser xvfb
+
+      - name: Build CRX
+        run: |
+          chmod +x package.sh
+          xvfb-run --auto-servernum bash package.sh
+
+      - name: Extract release notes
+        run: |
+          awk '/^## /{if(i++)exit}i{print}' CHANGELOGS.md > release-notes.md
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dofiltor.crx
+          body_path: release-notes.md
