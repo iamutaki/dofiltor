@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.4.5
+
+- activate workflow build
+
 ## 3.4.4
 
 - Removed browser-added fragments (`#:~:text=...`) from collected URLs to prevent open/download errors.

@@ -3,6 +3,7 @@ name: Release
 on:
   push:
     tags: [ "v*" ]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -36,7 +37,7 @@ jobs:
 
       - name: Extract release notes
         run: |
-          awk '/^## /{if(i++)exit}i{print}' CHANGELOGS.md > release-notes.md
+          awk '/^## /{if(i++)exit}i{print}' changelogs.md > release-notes.md
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
