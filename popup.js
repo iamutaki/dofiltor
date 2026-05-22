@@ -310,7 +310,10 @@ function renderRow(item, viewIndex) {
 
   const mt = document.createElement("div");
   mt.className = "rmeta";
-  mt.textContent = hostOf(item.url);
+  const hostSpan = document.createElement("span");
+  hostSpan.className = "host";
+  hostSpan.textContent = hostOf(item.url);
+  mt.appendChild(hostSpan);
   const statusChip = document.createElement("span");
   statusChip.className = "status-chip " + status;
   statusChip.textContent = status === "ok" ? "valid" : status === "fail" ? "dead" : "pending";
