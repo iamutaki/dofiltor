@@ -213,9 +213,9 @@ const I18N_MESSAGES = {
     // Popup - header
     appName: "Dofiltor",
     appSubtitle: "Dork File Collector",
-    toggleExtension: "Toggle ekstensi",
-    extensionOn: "Ekstensi aktif",
-    extensionOff: "Ekstensi nonaktif",
+    toggleExtension: "Toggle",
+    extensionOn: "Aktif",
+    extensionOff: "Nonaktif",
     themeToggle: "Tema",
 
     // Popup - auto-next bar

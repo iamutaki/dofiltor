@@ -13,10 +13,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Chromium
+      - name: Setup key
+        run: |
+          echo "${{ secrets.EXTENSION_KEY }}" | base64 -d > key.pem
+          chmod 600 key.pem
+
+      - name: Install Chrome + xvfb
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq chromium-browser xvfb
+          sudo apt-get install -y -qq google-chrome-stable xvfb || {
+            wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+            sudo dpkg -i google-chrome-stable_current_amd64.deb 2>/dev/null || sudo apt-get -fqq -y install
+            sudo apt-get install -y -qq xvfb
+          }
 
       - name: Build CRX
         run: |
