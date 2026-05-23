@@ -1,3 +1,42 @@
+#!/bin/bash
+# Regenerate GitHub Actions workflows (run from extension repo root).
+set -e
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+mkdir -p "$ROOT/.github/workflows"
+
+cat > "$ROOT/.github/workflows/ci.yml" << 'EOF'
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Extension version
+        id: ver
+        run: |
+          VERSION=$(node -p "JSON.parse(require('fs').readFileSync('manifest.json','utf8')).version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "manifest.json version: $VERSION"
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Locale keys
+        run: npm run check:locales
+EOF
+
+cat > "$ROOT/.github/workflows/release.yml" << 'EOF'
 name: Release
 
 on:
@@ -82,3 +121,6 @@ jobs:
         with:
           files: dofiltor.crx
           body_path: release-notes.md
+EOF
+
+echo "Wrote .github/workflows/ci.yml and release.yml"

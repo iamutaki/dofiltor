@@ -25,20 +25,20 @@ describe("migrateFileTypes", () => {
 
   it("at current version only normalizes user extensions", () => {
     const r = ft.migrateFileTypes(["PDF", ".doc", "doc"], CURRENT_VERSION);
-    assert.deepEqual(r.fileTypes, ["pdf", "doc"]);
+    assert.deepEqual([...r.fileTypes], ["pdf", "doc"]);
     assert.equal(r.fileTypesVersion, CURRENT_VERSION);
   });
 
   it("at current version with empty stored uses defaults", () => {
-    const baseline = ft.migrateFileTypes(undefined, 0).fileTypes;
+    const baseline = [...ft.migrateFileTypes(undefined, 0).fileTypes];
     const r = ft.migrateFileTypes([], CURRENT_VERSION);
-    assert.deepEqual(r.fileTypes, baseline);
+    assert.deepEqual([...r.fileTypes], baseline);
   });
 });
 
 describe("mergeFileTypes", () => {
   it("keeps user order and appends missing defaults", () => {
     const merged = ft.mergeFileTypes(["zip"], ["pdf", "doc"]);
-    assert.deepEqual(merged, ["zip", "pdf", "doc"]);
+    assert.deepEqual([...merged], ["zip", "pdf", "doc"]);
   });
 });
