@@ -1,5 +1,38 @@
 # Changelog
 
+## 3.5.0
+
+- Expanded default capture extensions for generic office formats: OpenDocument (ODP, ODG, ODF, ODB, flat ODF), Microsoft Office templates and macro-enabled files, legacy StarOffice, and other suites (WordPerfect, AbiWord, HWP, Apple iWork).
+- Centralized default file-type list and badge styling groups in `file-types.js`.
+- On extension update/startup, merge newly shipped default file extensions into saved settings without removing user-custom entries (`fileTypesVersion` tracks incremental additions).
+- Moved select/unselect/export-selected controls into the sort toolbar so the main action bar no longer shifts when selection appears.
+- Fixed double scrollbar in popup: capped panel height to Chrome's 600px limit and tightened flex on the results area so only the URL list scrolls.
+- Types summary dialog hides file types with zero collected URLs.
+- Lifetime stats: total URLs grabbed and checked (shown under the stats bar).
+- Persistent validation cache: reuse prior check results client-side (configurable max size, age, on/off).
+- Enhanced dork query history with provider metadata and configurable history limit.
+- Modernized checkbox controls in Settings to match the Chrome-style UI.
+- Expanded the File extensions textarea in Settings for easier editing.
+- Added extension-aware file badges and an available file types dialog from the Types stat.
+- Added Select visible and Unselect all controls for export-selected workflows.
+- Added a popup collection scope indicator for active provider, paused, unsupported, and permission-needed states.
+- Added provider test controls for checking host, path, and query rules against an example URL.
+- Added a release readiness checklist to the About page.
+- Added provider permission status badges and configurable validation mode.
+- Added optional host permission requests and dynamic content-script registration for user-added providers.
+- Reintroduced `scripting` permission for dynamic provider registration.
+- Deduplicated collected URL rows, normalized file URL fragments, stabilized the search bar height, and added a GitHub header button.
+- Kept auto-validation enabled by default while allowing users to disable it and clear queued automatic checks.
+- Added row selection with an export-selected action for CSV, TXT, JSON, and XLSX.
+- Replaced the domain-grouped export option with XLSX and added advanced text/wildcard/regex filtering.
+- Added a clear-filters action that appears when domain, type, or text filters are active.
+- Increased popup height with an explicit list minimum so collected files remain visible.
+- Hardened popup and options rendering to avoid raw HTML insertion and tolerate malformed local history data.
+- Removed the unused `activeTab` permission from the extension manifest.
+- Added a release-ready privacy policy draft and linked it from the About page.
+- Replaced the global `<all_urls>` content script match with explicit built-in provider hosts.
+- Reduced default DOM observer scope to supported search/dork result providers.
+
 ## 3.4.6
 
 - Split UI translations into per-locale `_locales/<lang>/ui.json` files with lazy loading; see `_locales/README.md` for contributors.

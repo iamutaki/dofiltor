@@ -6,7 +6,7 @@
 <p align="center"><strong>Dork File Collector</strong></p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-3.4.6-blue">
+  <img alt="Version" src="https://img.shields.io/badge/version-3.5.0-blue">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
   <img alt="Manifest" src="https://img.shields.io/badge/manifest-v3-orange">
   <img alt="Chrome" src="https://img.shields.io/badge/chrome-%E2%89%A588-4285F4?logo=googlechrome&logoColor=white">
@@ -86,6 +86,14 @@ Dofiltor supports **English** and **Bahasa Indonesia**. To add a language, see [
 4. Run `node scripts/check-locales.mjs` before opening a PR.
 
 Only the active locale (plus English fallback) is loaded at runtime — not every language at once.
+
+**Chrome Web Store ZIP** (no `key.pem`, no `.git`, no dev scripts):
+
+```bash
+chmod +x scripts/build-store-zip.sh
+./scripts/build-store-zip.sh
+# → dofiltor-store.zip
+```
 
 ---
 

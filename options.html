@@ -93,13 +93,56 @@
     textarea {
       min-height: 116px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     }
-    input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--blue); }
+    .capture-row { grid-template-columns: minmax(150px, 220px) minmax(0, 1fr); }
+    #fileTypes { min-height: 220px; line-height: 1.55; }
+    input[type="checkbox"] {
+      appearance: none; width: 34px; height: 20px; border: 1px solid var(--line);
+      border-radius: 999px; background: var(--control); position: relative;
+      cursor: pointer; flex-shrink: 0; transition: background 0.15s, border-color 0.15s;
+    }
+    input[type="checkbox"]::after {
+      content: ""; position: absolute; width: 14px; height: 14px; border-radius: 50%;
+      top: 2px; left: 2px; background: var(--subtle);
+      transition: transform 0.15s, background 0.15s;
+    }
+    input[type="checkbox"]:checked {
+      background: var(--blue); border-color: var(--blue);
+    }
+    input[type="checkbox"]:checked::after {
+      transform: translateX(14px); background: #fff;
+    }
+    input[type="checkbox"]:focus-visible {
+      outline: 2px solid var(--blue); outline-offset: 2px;
+    }
     .provider {
       border-top: 1px solid var(--line); padding: 14px 20px;
       display: grid; grid-template-columns: minmax(190px, 280px) 1fr; gap: 18px;
     }
     .provider-head { display: flex; align-items: center; gap: 10px; }
     .provider-name-text { font-weight: 500; }
+    .provider-status {
+      display: inline-flex; align-items: center; min-height: 20px; padding: 1px 7px;
+      border: 1px solid var(--line); border-radius: 999px;
+      color: var(--subtle); font-size: 11px; background: var(--control);
+    }
+    .provider-status.granted {
+      color: #137333; border-color: #b7dfbd; background: #e6f4ea;
+    }
+    .provider-status.needed {
+      color: #b06000; border-color: #f7d58b; background: #fff8e1;
+    }
+    .provider-status.invalid {
+      color: var(--danger); border-color: #f4b8b1; background: #fce8e6;
+    }
+    [data-theme="dark"] .provider-status.granted {
+      color: #81c995; border-color: #2d5a35; background: #18331f;
+    }
+    [data-theme="dark"] .provider-status.needed {
+      color: #fdd663; border-color: #5f4b16; background: #332800;
+    }
+    [data-theme="dark"] .provider-status.invalid {
+      color: #f28b82; border-color: #5c2b29; background: #3c1f1e;
+    }
     .provider-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .field span {
       display: block; color: var(--subtle); font-size: 12px; margin-bottom: 4px;
@@ -120,11 +163,28 @@
     }
     .about-row:first-of-type { border-top: 0; }
     .about-label { color: var(--subtle); }
+    .readiness-row {
+      display: grid; grid-template-columns: 180px 1fr; gap: 18px;
+      padding: 12px 20px; border-top: 1px solid var(--line); align-items: center;
+    }
+    .readiness-row:first-of-type { border-top: 0; }
+    .readiness-label { color: var(--subtle); }
+    .readiness-state {
+      display: inline-flex; width: fit-content; align-items: center;
+      padding: 2px 8px; border: 1px solid var(--line); border-radius: 999px;
+      background: var(--control); color: var(--subtle); font-size: 12px;
+    }
+    .readiness-state.ready {
+      color: #137333; border-color: #b7dfbd; background: #e6f4ea;
+    }
+    [data-theme="dark"] .readiness-state.ready {
+      color: #81c995; border-color: #2d5a35; background: #18331f;
+    }
     a { color: var(--blue); text-decoration: none; }
     a:hover { text-decoration: underline; }
     @media (max-width: 720px) {
       main { padding: 16px; }
-      .row, .provider, .about-row { grid-template-columns: 1fr; gap: 8px; }
+      .row, .provider, .about-row, .readiness-row { grid-template-columns: 1fr; gap: 8px; }
       .provider-grid { grid-template-columns: 1fr; }
     }
   </style>
@@ -144,7 +204,7 @@
     <section class="section" id="settingsSection">
       <div class="card">
         <div class="card-title">Appearance</div>
-        <div class="row">
+        <div class="row capture-row">
           <div>
             <div class="label">Theme</div>
             <div class="hint">Applies to the popup, settings, and about page.</div>
@@ -206,10 +266,56 @@
         </div>
         <div class="row">
           <div>
+            <div class="label">Validation mode</div>
+            <div class="hint">Choose how aggressively URL validation should check targets.</div>
+          </div>
+          <select id="validateMode">
+            <option value="head" data-i18n="validateHeadOnly">HEAD only</option>
+            <option value="head-get" data-i18n="validateHeadGet">HEAD + GET fallback</option>
+          </select>
+        </div>
+        <div class="row">
+          <div>
             <div class="label">Notifications</div>
             <div class="hint">Show collection, CAPTCHA, and completion notifications.</div>
           </div>
           <label class="provider-head"><input type="checkbox" id="notifications"> Enabled</label>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title" data-i18n="historyCacheTitle">History &amp; validation cache</div>
+        <div class="row">
+          <div>
+            <div class="label" data-i18n="reuseValidationCache">Reuse validation cache</div>
+            <div class="hint" data-i18n="reuseValidationCacheHint">Skip network checks when a URL was validated before. Applies on collect and manual validate.</div>
+          </div>
+          <label class="provider-head"><input type="checkbox" id="reuseValidationCache"> <span data-i18n="enabled">Enabled</span></label>
+        </div>
+        <div class="row">
+          <div>
+            <div class="label" data-i18n="urlCacheMaxEntries">Validation cache size</div>
+            <div class="hint" data-i18n="urlCacheMaxEntriesHint">Maximum stored URL validation results. Oldest entries are removed first.</div>
+          </div>
+          <input type="number" id="urlCacheMaxEntries" min="100" max="50000" step="100" value="5000">
+        </div>
+        <div class="row">
+          <div>
+            <div class="label" data-i18n="urlCacheMaxAgeDays">Cache max age (days)</div>
+            <div class="hint" data-i18n="urlCacheMaxAgeDaysHint">0 = never expire. Expired entries are re-checked over the network.</div>
+          </div>
+          <input type="number" id="urlCacheMaxAgeDays" min="0" max="3650" step="1" value="0">
+        </div>
+        <div class="row">
+          <div>
+            <div class="label" data-i18n="dorkHistoryMax">Dork query history limit</div>
+            <div class="hint" data-i18n="dorkHistoryMaxHint">Maximum saved dork queries in scan history (popup).</div>
+          </div>
+          <input type="number" id="dorkHistoryMax" min="10" max="2000" step="10" value="200">
+        </div>
+        <div class="actions">
+          <button class="chrome danger" id="clearValidationCache" type="button" data-i18n="clearValidationCache">Clear validation cache</button>
+          <span class="status" id="cacheStatus"></span>
         </div>
       </div>
 
@@ -246,12 +352,22 @@
         <div class="card-title">About</div>
         <div class="about-row"><div class="about-label">Name</div><div>Dofiltor</div></div>
         <div class="about-row"><div class="about-label">Description</div><div>Dork File Collector</div></div>
-        <div class="about-row"><div class="about-label">Version</div><div id="version">3.4.6</div></div>
+        <div class="about-row"><div class="about-label">Version</div><div id="version">3.5.0</div></div>
         <div class="about-row"><div class="about-label">Repository</div><div><a href="https://github.com/iamutaki/dofiltor" target="_blank" rel="noreferrer">iamutaki/dofiltor</a></div></div>
+        <div class="about-row"><div class="about-label">Privacy Policy</div><div><a href="https://github.com/iamutaki/dofiltor/blob/main/docs/privacy.md" target="_blank" rel="noreferrer">docs/privacy.md</a></div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Release readiness</div>
+        <div class="readiness-row"><div class="readiness-label">Privacy policy</div><div><span class="readiness-state ready" id="readyPrivacy">Ready</span></div></div>
+        <div class="readiness-row"><div class="readiness-label">Permissions</div><div><span class="readiness-state ready" id="readyPermissions">Ready</span></div></div>
+        <div class="readiness-row"><div class="readiness-label">Provider hosts</div><div><span class="readiness-state ready" id="readyProviders">Ready</span></div></div>
+        <div class="readiness-row"><div class="readiness-label">Version</div><div><span class="readiness-state ready" id="readyVersion">Ready</span></div></div>
+        <div class="readiness-row"><div class="readiness-label">Changelog</div><div><span class="readiness-state ready" id="readyChangelog">Ready</span></div></div>
       </div>
     </section>
   </main>
   <script src="i18n.js"></script>
+  <script src="file-types.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

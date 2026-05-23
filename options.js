@@ -1,8 +1,4 @@
 const SETTINGS_KEY = "dofiltor_settings";
-const DEFAULT_FILE_TYPES = [
-  "pdf", "xls", "xlsx", "doc", "docx", "txt", "csv",
-  "ppt", "pptx", "odt", "ods", "rtf",
-];
 const DEFAULT_PROVIDERS = [
   { id: "google", name: "Google", enabled: true, hostContains: "google.", pathContains: "/search", queryParam: "q", nextSelector: "#pnnext" },
   { id: "bing", name: "Bing", enabled: true, hostContains: "bing.com", pathContains: "/search", queryParam: "q", nextSelector: "a.sb_pagN" },
@@ -10,13 +6,22 @@ const DEFAULT_PROVIDERS = [
   { id: "yahoo", name: "Yahoo", enabled: false, hostContains: "search.yahoo.com", pathContains: "/search", queryParam: "p", nextSelector: "a.next" },
   { id: "yandex", name: "Yandex", enabled: false, hostContains: "yandex.", pathContains: "/search", queryParam: "text", nextSelector: "a[aria-label='Next page']" },
 ];
+const STATIC_PROVIDER_HOSTS = new Set([
+  "google.com", "google.co.id", "bing.com", "duckduckgo.com",
+  "search.yahoo.com", "yandex.com", "yandex.ru",
+]);
 const DEFAULT_SETTINGS = {
   autoNext: false,
   maxPages: 50,
   pageDelay: 3000,
   autoValidate: true,
   validateDelay: 1500,
+  validateMode: "head-get",
   notifications: true,
+  reuseValidationCache: true,
+  urlCacheMaxEntries: 5000,
+  urlCacheMaxAgeDays: 0,
+  dorkHistoryMax: 200,
   fileTypes: DEFAULT_FILE_TYPES,
   providers: DEFAULT_PROVIDERS,
 };
@@ -43,10 +48,12 @@ function loadSettings() {
   return new Promise((resolve) => {
     chrome.storage.local.get(SETTINGS_KEY, (res) => {
       const stored = res[SETTINGS_KEY] || {};
+      const migration = migrateFileTypes(stored.fileTypes, stored.fileTypesVersion);
       resolve({
         ...DEFAULT_SETTINGS,
         ...stored,
-        fileTypes: Array.isArray(stored.fileTypes) && stored.fileTypes.length ? stored.fileTypes : DEFAULT_FILE_TYPES,
+        fileTypes: migration.fileTypes,
+        fileTypesVersion: migration.fileTypesVersion,
         providers: Array.isArray(stored.providers) && stored.providers.length ? stored.providers : DEFAULT_PROVIDERS,
       });
     });
@@ -56,7 +63,99 @@ function loadSettings() {
 function saveSettings(next) {
   settings = next;
   if (!hasChromeStorage()) return Promise.resolve();
-  return new Promise((resolve) => chrome.storage.local.set({ [SETTINGS_KEY]: next }, resolve));
+  return new Promise((resolve) => {
+    if (typeof chrome !== "undefined" && chrome.runtime?.sendMessage) {
+      chrome.runtime.sendMessage({ type: "SAVE_SETTINGS", settings: next }, () => resolve());
+      return;
+    }
+    chrome.storage.local.set({ [SETTINGS_KEY]: next }, resolve);
+  });
+}
+
+function providerHostBase(hostContains) {
+  return String(hostContains || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/^\*:\/\//, "")
+    .replace(/^\*\./, "")
+    .replace(/^\./, "")
+    .replace(/\/.*$/, "")
+    .replace(/:\d+$/, "")
+    .replace(/[^a-z0-9.-]/g, "")
+    .replace(/^\.+|\.+$/g, "");
+}
+
+function providerOrigins(provider) {
+  const host = providerHostBase(provider.hostContains);
+  if (!host || !host.includes(".") || host.endsWith(".")) return [];
+  return [
+    "http://" + host + "/*",
+    "https://" + host + "/*",
+    "http://*." + host + "/*",
+    "https://*." + host + "/*",
+  ];
+}
+
+function providerMatchesTestUrl(provider, url) {
+  try {
+    const parsed = new URL(url);
+    const hostNeedle = String(provider.hostContains || "").toLowerCase();
+    const pathNeedle = String(provider.pathContains || "").toLowerCase();
+    const queryParam = String(provider.queryParam || "").trim();
+    return {
+      ok: (!hostNeedle || parsed.hostname.toLowerCase().includes(hostNeedle)) &&
+        (!pathNeedle || parsed.pathname.toLowerCase().includes(pathNeedle)) &&
+        (!queryParam || parsed.searchParams.has(queryParam)),
+      host: !hostNeedle || parsed.hostname.toLowerCase().includes(hostNeedle),
+      path: !pathNeedle || parsed.pathname.toLowerCase().includes(pathNeedle),
+      query: !queryParam || parsed.searchParams.has(queryParam),
+    };
+  } catch (e) {
+    return { ok: false, host: false, path: false, query: false };
+  }
+}
+
+function providerPermissionState(provider) {
+  const origins = providerOrigins(provider);
+  const host = providerHostBase(provider.hostContains);
+  if (!provider.enabled) return Promise.resolve({ state: "disabled", label: t("permissionDisabled") });
+  if (!host || !host.includes(".") || host.endsWith(".")) {
+    return Promise.resolve({ state: "invalid", label: t("permissionInvalid") });
+  }
+  if (STATIC_PROVIDER_HOSTS.has(host)) {
+    return Promise.resolve({ state: "granted", label: t("permissionBuiltIn") });
+  }
+  if (typeof chrome === "undefined" || !chrome.permissions?.contains) {
+    return Promise.resolve({ state: "needed", label: t("permissionUnknown") });
+  }
+  return new Promise((resolve) => {
+    chrome.permissions.contains({ origins }, (granted) => {
+      resolve({ state: granted ? "granted" : "needed", label: granted ? t("permissionGranted") : t("permissionNeeded") });
+    });
+  });
+}
+
+function customProviderOrigins(nextProviders) {
+  const origins = [];
+  for (const provider of nextProviders) {
+    const host = providerHostBase(provider.hostContains);
+    if (!provider.enabled || STATIC_PROVIDER_HOSTS.has(host)) continue;
+    origins.push(...providerOrigins(provider));
+  }
+  return [...new Set(origins)];
+}
+
+function requestProviderPermissions(nextProviders) {
+  const origins = customProviderOrigins(nextProviders);
+  if (!origins.length || typeof chrome === "undefined" || !chrome.permissions?.request) {
+    return Promise.resolve({ granted: true, origins: [] });
+  }
+  return new Promise((resolve) => {
+    chrome.permissions.request({ origins }, (granted) => {
+      resolve({ granted: !!granted, origins });
+    });
+  });
 }
 
 function setTab(name) {
@@ -70,33 +169,89 @@ function setTab(name) {
 function providerTemplate(provider, index) {
   const box = document.createElement("div");
   box.className = "provider";
-  box.innerHTML = `
-    <div>
-      <label class="provider-head"><input type="checkbox" class="provider-enabled"> <span class="provider-name-text"></span></label>
-      <div class="hint">Match result pages by host and path.</div>
-    </div>
-    <div>
-      <div class="provider-grid">
-        <label class="field"><span>Name</span><input type="text" class="provider-name"></label>
-        <label class="field"><span>Host contains</span><input type="text" class="provider-host"></label>
-        <label class="field"><span>Path contains</span><input type="text" class="provider-path"></label>
-        <label class="field"><span>Query param</span><input type="text" class="provider-query"></label>
-        <label class="field"><span>Next selector</span><input type="text" class="provider-next"></label>
-      </div>
-      <div style="margin-top:8px"><button class="chrome danger provider-remove" type="button">Remove</button></div>
-    </div>
-  `;
-  box.querySelector(".provider-enabled").checked = !!provider.enabled;
-  box.querySelector(".provider-name-text").textContent = provider.name || provider.id || "Provider";
-  box.querySelector(".provider-name").value = provider.name || "";
-  box.querySelector(".provider-host").value = provider.hostContains || "";
-  box.querySelector(".provider-path").value = provider.pathContains || "";
-  box.querySelector(".provider-query").value = provider.queryParam || "q";
-  box.querySelector(".provider-next").value = provider.nextSelector || "";
-  box.querySelector(".provider-remove").addEventListener("click", () => {
+
+  const summary = document.createElement("div");
+  const providerHead = document.createElement("label");
+  providerHead.className = "provider-head";
+  const enabled = document.createElement("input");
+  enabled.type = "checkbox";
+  enabled.className = "provider-enabled";
+  enabled.checked = !!provider.enabled;
+  const providerNameText = document.createElement("span");
+  providerNameText.className = "provider-name-text";
+  providerNameText.textContent = provider.name || provider.id || "Provider";
+  providerHead.append(enabled, providerNameText);
+  const status = document.createElement("span");
+  status.className = "provider-status";
+  status.textContent = t("permissionChecking");
+  providerHead.appendChild(status);
+  providerPermissionState(provider).then((result) => {
+    status.className = "provider-status " + result.state;
+    status.textContent = result.label;
+  });
+  const hint = document.createElement("div");
+  hint.className = "hint";
+  hint.textContent = "Match result pages by host and path.";
+  summary.append(providerHead, hint);
+
+  const controls = document.createElement("div");
+  const grid = document.createElement("div");
+  grid.className = "provider-grid";
+
+  const makeField = (labelText, className, value) => {
+    const label = document.createElement("label");
+    label.className = "field";
+    const span = document.createElement("span");
+    span.textContent = labelText;
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = className;
+    input.value = value || "";
+    label.append(span, input);
+    return label;
+  };
+
+  grid.append(
+    makeField("Name", "provider-name", provider.name || ""),
+    makeField("Host contains", "provider-host", provider.hostContains || ""),
+    makeField("Path contains", "provider-path", provider.pathContains || ""),
+    makeField("Query param", "provider-query", provider.queryParam || "q"),
+    makeField("Next selector", "provider-next", provider.nextSelector || ""),
+    makeField("Test URL", "provider-test-url", "")
+  );
+
+  const removeWrap = document.createElement("div");
+  removeWrap.style.marginTop = "8px";
+  removeWrap.style.display = "flex";
+  removeWrap.style.alignItems = "center";
+  removeWrap.style.gap = "8px";
+  const testBtn = document.createElement("button");
+  testBtn.className = "chrome provider-test";
+  testBtn.type = "button";
+  testBtn.textContent = "Test";
+  const testStatus = document.createElement("span");
+  testStatus.className = "status provider-test-status";
+  testBtn.addEventListener("click", () => {
+    const current = {
+      hostContains: box.querySelector(".provider-host").value.trim().toLowerCase(),
+      pathContains: box.querySelector(".provider-path").value.trim(),
+      queryParam: box.querySelector(".provider-query").value.trim() || "q",
+    };
+    const result = providerMatchesTestUrl(current, box.querySelector(".provider-test-url").value.trim());
+    testStatus.textContent = result.ok ? t("providerTestMatched") : t("providerTestFailed");
+    testStatus.style.color = result.ok ? "var(--blue)" : "var(--danger)";
+  });
+  const removeBtn = document.createElement("button");
+  removeBtn.className = "chrome danger provider-remove";
+  removeBtn.type = "button";
+  removeBtn.textContent = "Remove";
+  removeBtn.addEventListener("click", () => {
     providers.splice(index, 1);
     renderProviders();
   });
+  removeWrap.append(testBtn, removeBtn, testStatus);
+  controls.append(grid, removeWrap);
+  box.append(summary, controls);
   return box;
 }
 
@@ -121,7 +276,18 @@ function readProviders() {
   }).filter((provider) => provider.hostContains);
 }
 
+function sendRuntimeMessage(payload) {
+  return new Promise((resolve) => {
+    if (typeof chrome !== "undefined" && chrome.runtime?.sendMessage) {
+      chrome.runtime.sendMessage(payload, (response) => resolve(response));
+    } else {
+      resolve(null);
+    }
+  });
+}
+
 async function save() {
+  const nextProviders = readProviders();
   const next = {
     ...settings,
     autoNext: $("autoNext").checked,
@@ -129,21 +295,33 @@ async function save() {
     pageDelay: Math.max(500, parseInt($("pageDelay").value, 10) || DEFAULT_SETTINGS.pageDelay),
     autoValidate: $("autoValidate").checked,
     validateDelay: Math.max(0, parseInt($("validateDelay").value, 10) || DEFAULT_SETTINGS.validateDelay),
+    validateMode: $("validateMode").value || DEFAULT_SETTINGS.validateMode,
     notifications: $("notifications").checked,
+    reuseValidationCache: $("reuseValidationCache").checked,
+    urlCacheMaxEntries: Math.max(100, parseInt($("urlCacheMaxEntries").value, 10) || DEFAULT_SETTINGS.urlCacheMaxEntries),
+    urlCacheMaxAgeDays: Math.max(0, parseInt($("urlCacheMaxAgeDays").value, 10) || 0),
+    dorkHistoryMax: Math.max(10, parseInt($("dorkHistoryMax").value, 10) || DEFAULT_SETTINGS.dorkHistoryMax),
     fileTypes: normalizeFileTypes($("fileTypes").value),
-    providers: readProviders(),
+    fileTypesVersion: FILE_TYPES_VERSION,
+    providers: nextProviders,
   };
   saveTheme($("themeSelect").value);
   applyTheme($("themeSelect").value);
   if (!next.fileTypes.length) next.fileTypes = DEFAULT_FILE_TYPES;
   if (!next.providers.length) next.providers = DEFAULT_PROVIDERS;
+  const permissionResult = await requestProviderPermissions(next.providers);
   await saveSettings(next);
-  $("status").textContent = t("saved");
+  $("status").textContent = permissionResult.granted ? t("saved") : t("savedPermissionMissing");
   setTimeout(() => { $("status").textContent = ""; }, 1800);
 }
 
 async function resetDefaults() {
-  settings = { ...DEFAULT_SETTINGS, fileTypes: DEFAULT_FILE_TYPES, providers: DEFAULT_PROVIDERS };
+  settings = {
+    ...DEFAULT_SETTINGS,
+    fileTypes: DEFAULT_FILE_TYPES.slice(),
+    fileTypesVersion: FILE_TYPES_VERSION,
+    providers: DEFAULT_PROVIDERS,
+  };
   saveTheme("auto");
   applyTheme("auto");
   $("themeSelect").value = "auto";
@@ -152,7 +330,12 @@ async function resetDefaults() {
   $("pageDelay").value = DEFAULT_SETTINGS.pageDelay;
   $("autoValidate").checked = DEFAULT_SETTINGS.autoValidate;
   $("validateDelay").value = DEFAULT_SETTINGS.validateDelay;
+  $("validateMode").value = DEFAULT_SETTINGS.validateMode;
   $("notifications").checked = DEFAULT_SETTINGS.notifications;
+  $("reuseValidationCache").checked = DEFAULT_SETTINGS.reuseValidationCache;
+  $("urlCacheMaxEntries").value = DEFAULT_SETTINGS.urlCacheMaxEntries;
+  $("urlCacheMaxAgeDays").value = DEFAULT_SETTINGS.urlCacheMaxAgeDays;
+  $("dorkHistoryMax").value = DEFAULT_SETTINGS.dorkHistoryMax;
   $("fileTypes").value = DEFAULT_FILE_TYPES.join("\n");
   providers = DEFAULT_PROVIDERS.map((provider) => ({ ...provider }));
   renderProviders();
@@ -182,6 +365,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderProviders();
     localizeOptions();
   });
+  $("clearValidationCache").addEventListener("click", async () => {
+    await sendRuntimeMessage({ type: "CLEAR_VALIDATION_CACHE" });
+    $("cacheStatus").textContent = t("validationCacheCleared");
+    setTimeout(() => { $("cacheStatus").textContent = ""; }, 1800);
+  });
 
   settings = await loadSettings();
   providers = settings.providers.map((provider) => ({ ...provider }));
@@ -191,11 +379,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("pageDelay").value = settings.pageDelay;
   $("autoValidate").checked = !!settings.autoValidate;
   $("validateDelay").value = settings.validateDelay;
+  $("validateMode").value = settings.validateMode || DEFAULT_SETTINGS.validateMode;
   $("notifications").checked = !!settings.notifications;
+  $("reuseValidationCache").checked = settings.reuseValidationCache !== false;
+  $("urlCacheMaxEntries").value = settings.urlCacheMaxEntries ?? DEFAULT_SETTINGS.urlCacheMaxEntries;
+  $("urlCacheMaxAgeDays").value = settings.urlCacheMaxAgeDays ?? DEFAULT_SETTINGS.urlCacheMaxAgeDays;
+  $("dorkHistoryMax").value = settings.dorkHistoryMax ?? DEFAULT_SETTINGS.dorkHistoryMax;
   $("fileTypes").value = settings.fileTypes.join("\n");
   $("version").textContent = typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.getManifest
     ? chrome.runtime.getManifest().version
-    : "3.4.6";
+    : "3.5.0";
   renderProviders();
   applyI18n();
   localizeOptions();
@@ -210,18 +403,30 @@ function localizeOptions() {
   const titles = document.querySelectorAll(".card-title");
   if (titles[0]) titles[0].textContent = t("appearance");
   if (titles[1]) titles[1].textContent = t("automation");
-  if (titles[2]) titles[2].textContent = t("capture");
-  if (titles[3]) titles[3].textContent = t("providers");
-  if (titles[4]) titles[4].textContent = t("about");
+  if (titles[2]) titles[2].textContent = t("historyCacheTitle");
+  if (titles[3]) titles[3].textContent = t("capture");
+  if (titles[4]) titles[4].textContent = t("providers");
+  if (titles[5]) titles[5].textContent = t("about");
+  if (titles[6]) titles[6].textContent = t("releaseReadiness");
 
   const labels = document.querySelectorAll(".label");
-  const labelKeys = ["theme", "language", "autoNext", "maxPages", "pageDelay", "autoValidate", "validationDelay", "notifications", "fileExtensions"];
+  const labelKeys = [
+    "theme", "language", "autoNext", "maxPages", "pageDelay", "autoValidate",
+    "validationDelay", "validationMode", "notifications",
+    "reuseValidationCache", "urlCacheMaxEntries", "urlCacheMaxAgeDays", "dorkHistoryMax",
+    "fileExtensions",
+  ];
   labels.forEach((label, index) => {
     if (labelKeys[index]) label.textContent = t(labelKeys[index]);
   });
 
   const hints = document.querySelectorAll(".hint");
-  const hintKeys = ["themeHint", "languageHint", "autoNextHint", "maxPagesHint", "pageDelayHint", "autoValidateHint", "validationDelayHint", "notificationsHint", "fileExtensionsHint"];
+  const hintKeys = [
+    "themeHint", "languageHint", "autoNextHint", "maxPagesHint", "pageDelayHint",
+    "autoValidateHint", "validationDelayHint", "validationModeHint", "notificationsHint",
+    "reuseValidationCacheHint", "urlCacheMaxEntriesHint", "urlCacheMaxAgeDaysHint", "dorkHistoryMaxHint",
+    "fileExtensionsHint",
+  ];
   hints.forEach((hint, index) => {
     if (hint.closest(".provider")) {
       hint.textContent = t("providerHint");
@@ -233,6 +438,8 @@ function localizeOptions() {
   $("themeSelect").querySelector('[value="auto"]').textContent = t("auto");
   $("themeSelect").querySelector('[value="light"]').textContent = t("light");
   $("themeSelect").querySelector('[value="dark"]').textContent = t("dark");
+  $("validateMode").querySelector('[value="head"]').textContent = t("validateHeadOnly");
+  $("validateMode").querySelector('[value="head-get"]').textContent = t("validateHeadGet");
   document.querySelectorAll(".provider-head").forEach((label) => {
     const checkbox = label.querySelector("input");
     if (checkbox && checkbox.id) label.lastChild.textContent = " " + t("enabled");
@@ -245,16 +452,24 @@ function localizeOptions() {
       "provider-path": "pathContains",
       "provider-query": "queryParam",
       "provider-next": "nextSelector",
+      "provider-test-url": "testUrl",
     };
     const key = Object.keys(map).find((cls) => input?.classList.contains(cls));
     if (key) span.textContent = t(map[key]);
   });
   document.querySelectorAll(".provider-remove").forEach((btn) => { btn.textContent = t("remove"); });
+  document.querySelectorAll(".provider-test").forEach((btn) => { btn.textContent = t("testProvider"); });
   $("addProvider").textContent = t("addProvider");
+  $("clearValidationCache").textContent = t("clearValidationCache");
   $("save").textContent = t("save");
   $("reset").textContent = t("resetDefaults");
 
   const aboutRows = document.querySelectorAll(".about-label");
-  const aboutKeys = ["name", "description", "version", "repository"];
+  const aboutKeys = ["name", "description", "version", "repository", "privacyPolicy"];
   aboutRows.forEach((row, index) => { row.textContent = t(aboutKeys[index]); });
+
+  const readinessLabels = document.querySelectorAll(".readiness-label");
+  const readinessKeys = ["privacyPolicy", "permissions", "providerHosts", "version", "changelog"];
+  readinessLabels.forEach((row, index) => { row.textContent = t(readinessKeys[index]); });
+  document.querySelectorAll(".readiness-state").forEach((state) => { state.textContent = t("ready"); });
 }
