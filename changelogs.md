@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Hardened popup and options rendering to avoid raw HTML insertion and tolerate malformed local history data.
 - Removed the unused `activeTab` permission from the extension manifest.
 - Added a release-ready privacy policy draft and linked it from the About page.
 - Removed the unused `scripting` permission from the extension manifest.

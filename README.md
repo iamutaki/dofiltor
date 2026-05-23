@@ -102,6 +102,14 @@ chmod +x package.sh
 
 CI writes the secret to `$RUNNER_TEMP/extension-key.pem` and passes `DOFILTOR_PACK_KEY` so Chrome never sees a key file inside the extension folder.
 
+**Chrome Web Store ZIP** (no `key.pem`, no `.git`, no dev scripts):
+
+```bash
+chmod +x scripts/build-store-zip.sh
+./scripts/build-store-zip.sh
+# → dofiltor-store.zip
+```
+
 ---
 
 ## License

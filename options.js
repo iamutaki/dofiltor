@@ -70,33 +70,61 @@ function setTab(name) {
 function providerTemplate(provider, index) {
   const box = document.createElement("div");
   box.className = "provider";
-  box.innerHTML = `
-    <div>
-      <label class="provider-head"><input type="checkbox" class="provider-enabled"> <span class="provider-name-text"></span></label>
-      <div class="hint">Match result pages by host and path.</div>
-    </div>
-    <div>
-      <div class="provider-grid">
-        <label class="field"><span>Name</span><input type="text" class="provider-name"></label>
-        <label class="field"><span>Host contains</span><input type="text" class="provider-host"></label>
-        <label class="field"><span>Path contains</span><input type="text" class="provider-path"></label>
-        <label class="field"><span>Query param</span><input type="text" class="provider-query"></label>
-        <label class="field"><span>Next selector</span><input type="text" class="provider-next"></label>
-      </div>
-      <div style="margin-top:8px"><button class="chrome danger provider-remove" type="button">Remove</button></div>
-    </div>
-  `;
-  box.querySelector(".provider-enabled").checked = !!provider.enabled;
-  box.querySelector(".provider-name-text").textContent = provider.name || provider.id || "Provider";
-  box.querySelector(".provider-name").value = provider.name || "";
-  box.querySelector(".provider-host").value = provider.hostContains || "";
-  box.querySelector(".provider-path").value = provider.pathContains || "";
-  box.querySelector(".provider-query").value = provider.queryParam || "q";
-  box.querySelector(".provider-next").value = provider.nextSelector || "";
-  box.querySelector(".provider-remove").addEventListener("click", () => {
+
+  const summary = document.createElement("div");
+  const providerHead = document.createElement("label");
+  providerHead.className = "provider-head";
+  const enabled = document.createElement("input");
+  enabled.type = "checkbox";
+  enabled.className = "provider-enabled";
+  enabled.checked = !!provider.enabled;
+  const providerNameText = document.createElement("span");
+  providerNameText.className = "provider-name-text";
+  providerNameText.textContent = provider.name || provider.id || "Provider";
+  providerHead.append(enabled, providerNameText);
+  const hint = document.createElement("div");
+  hint.className = "hint";
+  hint.textContent = "Match result pages by host and path.";
+  summary.append(providerHead, hint);
+
+  const controls = document.createElement("div");
+  const grid = document.createElement("div");
+  grid.className = "provider-grid";
+
+  const makeField = (labelText, className, value) => {
+    const label = document.createElement("label");
+    label.className = "field";
+    const span = document.createElement("span");
+    span.textContent = labelText;
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = className;
+    input.value = value || "";
+    label.append(span, input);
+    return label;
+  };
+
+  grid.append(
+    makeField("Name", "provider-name", provider.name || ""),
+    makeField("Host contains", "provider-host", provider.hostContains || ""),
+    makeField("Path contains", "provider-path", provider.pathContains || ""),
+    makeField("Query param", "provider-query", provider.queryParam || "q"),
+    makeField("Next selector", "provider-next", provider.nextSelector || "")
+  );
+
+  const removeWrap = document.createElement("div");
+  removeWrap.style.marginTop = "8px";
+  const removeBtn = document.createElement("button");
+  removeBtn.className = "chrome danger provider-remove";
+  removeBtn.type = "button";
+  removeBtn.textContent = "Remove";
+  removeBtn.addEventListener("click", () => {
     providers.splice(index, 1);
     renderProviders();
   });
+  removeWrap.appendChild(removeBtn);
+  controls.append(grid, removeWrap);
+  box.append(summary, controls);
   return box;
 }
 

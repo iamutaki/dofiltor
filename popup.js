@@ -42,12 +42,30 @@ let undoTimer = null;
 const ROW_HEIGHT = 49;
 const CSV_COLUMNS = ["url", "file_type", "query", "source_page", "discovered_at", "size"];
 const SVG = {
-  moon: '<path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/>',
-  sun: '<path d="M6.76 4.84l-1.8-1.79-1.41 1.41 1.79 1.79 1.42-1.41zM4 10.5H1v2h3v-2zm9-9.95h-2V3.5h2V.55zm7.45 3.91l-1.41-1.41-1.79 1.79 1.41 1.41 1.79-1.79zm-3.21 13.7l1.79 1.8 1.41-1.41-1.8-1.79-1.4 1.4zM20 10.5v2h3v-2h-3zm-8-5c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm-1 16.95h2V19.5h-2v2.95zm-7.45-3.91l1.41 1.41 1.79 1.8-1.41-1.41-1.79 1.8z"/>',
-  auto: '<path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/>',
+  moon: "M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z",
+  sun: "M6.76 4.84l-1.8-1.79-1.41 1.41 1.79 1.79 1.42-1.41zM4 10.5H1v2h3v-2zm9-9.95h-2V3.5h2V.55zm7.45 3.91l-1.41-1.41-1.79 1.79 1.41 1.41 1.79-1.79zm-3.21 13.7l1.79 1.8 1.41-1.41-1.8-1.79-1.4 1.4zM20 10.5v2h3v-2h-3zm-8-5c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm-1 16.95h2V19.5h-2v2.95zm-7.45-3.91l1.41 1.41 1.79 1.8-1.41-1.41-1.79 1.8z",
+  auto: "M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z",
+  open: "M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z",
+  download: "M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z",
+  remove: "M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z",
+  sortAsc: "M7 14l5-5 5 5H7z",
+  sortDesc: "M7 10l5 5 5-5H7z",
 };
 
 function $(id) { return document.getElementById(id); }
+function setSvgPath(svg, pathData) {
+  if (!svg) return;
+  svg.textContent = "";
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", pathData);
+  svg.appendChild(path);
+}
+function createSvg(pathData) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  setSvgPath(svg, pathData);
+  return svg;
+}
 
 function applyAppVersion() {
   const v = typeof chrome !== "undefined" && chrome.runtime?.getManifest?.()?.version;
@@ -75,7 +93,7 @@ function loadTheme() { return localStorage.getItem("dofiltor_theme") || "auto"; 
 function saveTheme(t) { localStorage.setItem("dofiltor_theme", t); }
 function applyTheme(t) {
   document.documentElement.setAttribute("data-theme", t);
-  $("themeIcon").innerHTML = SVG[t === "light" ? "sun" : t === "dark" ? "moon" : "auto"];
+  setSvgPath($("themeIcon"), SVG[t === "light" ? "sun" : t === "dark" ? "moon" : "auto"]);
   $("themeLbl").textContent = { auto: "A", light: "L", dark: "D" }[t];
 }
 function cycleTheme() {
@@ -122,6 +140,11 @@ function formatSize(bytes) {
   return (bytes / (1024 * 1024)).toFixed(1) + " MB";
 }
 function setStatus(text) { $("fLeft").textContent = text; }
+function safeText(value) { return value == null ? "" : String(value); }
+function safeNumber(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
 
 function updateStats() {
   const n = allUrls.length;
@@ -343,24 +366,24 @@ function renderRow(item, viewIndex) {
 
   const acts = document.createElement("div");
   acts.className = "racts";
-  const mkBtn = (svg, title, cls, fn) => {
+  const mkBtn = (svgPath, title, cls, fn) => {
     const b = document.createElement("button");
     b.type = "button";
     b.className = "ib" + (cls ? " " + cls : "");
-    b.innerHTML = svg;
+    b.appendChild(createSvg(svgPath));
     b.title = title;
     b.setAttribute("aria-label", title);
     b.addEventListener("click", (e) => { e.stopPropagation(); fn(); });
     return b;
   };
-  acts.appendChild(mkBtn('<svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>', "Open", "", () => window.open(item.url, "_blank")));
-  acts.appendChild(mkBtn('<svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>', "Download", "", async () => {
+  acts.appendChild(mkBtn(SVG.open, "Open", "", () => window.open(item.url, "_blank")));
+  acts.appendChild(mkBtn(SVG.download, "Download", "", async () => {
     await sendMessage({ type: "DOWNLOAD", url: item.url });
     item.downloaded = true;
     await saveUrls(allUrls);
     refresh();
   }));
-  acts.appendChild(mkBtn('<svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>', "Remove", "danger", async () => {
+  acts.appendChild(mkBtn(SVG.remove, "Remove", "danger", async () => {
     const removed = allUrls.splice(idx, 1);
     await saveUrls(allUrls);
     showUndo("Removed 1 URL", async () => {
@@ -531,14 +554,16 @@ async function pollBatchStatus() {
 
 function showHistory() {
   sendMessage({ type: "GET_HISTORY" }).then((history) => {
-    if (!history || !history.length) { setStatus("No scan history yet"); return; }
+    if (!Array.isArray(history) || !history.length) { setStatus("No scan history yet"); return; }
     const box = $("urlList");
     $("empty").style.display = "none";
     box.style.display = "block";
     box.textContent = "";
     const header = document.createElement("div");
     header.className = "history-head";
-    header.innerHTML = "<span>Scan History (" + history.length + ")</span>";
+    const title = document.createElement("span");
+    title.textContent = "Scan History (" + history.length + ")";
+    header.appendChild(title);
     const clearBtn = document.createElement("button");
     clearBtn.type = "button";
     clearBtn.textContent = "Clear";
@@ -547,6 +572,10 @@ function showHistory() {
     box.appendChild(header);
 
     for (const h of history) {
+      const query = safeText(h && h.query);
+      const urls = safeNumber(h && h.urls);
+      const pages = safeNumber(h && h.pages);
+      const lastScan = safeText(h && h.lastScan);
       const row = document.createElement("div");
       row.className = "row history-row";
       const icon = document.createElement("div");
@@ -557,12 +586,14 @@ function showHistory() {
       info.className = "rinfo";
       const nm = document.createElement("div");
       nm.className = "rname";
-      nm.textContent = h.query.length > 50 ? h.query.substring(0, 50) + "..." : h.query;
-      nm.title = h.query;
+      nm.textContent = query.length > 50 ? query.substring(0, 50) + "..." : query;
+      nm.title = query;
       info.appendChild(nm);
       const mt = document.createElement("div");
       mt.className = "rmeta";
-      mt.textContent = h.urls + " URLs \u00B7 " + h.pages + " pages \u00B7 " + (h.lastScan ? new Date(h.lastScan).toLocaleString() : "unknown");
+      const parsedDate = lastScan ? new Date(lastScan) : null;
+      const dateText = parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate.toLocaleString() : "unknown";
+      mt.textContent = urls + " URLs \u00B7 " + pages + " pages \u00B7 " + dateText;
       info.appendChild(mt);
       row.appendChild(info);
       box.appendChild(row);
@@ -584,9 +615,7 @@ function renderSortUI() {
   const label = sortDir === "asc" ? "Sort ascending" : "Sort descending";
   btn.setAttribute("aria-label", label);
   btn.title = label;
-  icon.innerHTML = sortDir === "asc"
-    ? '<path d="M7 14l5-5 5 5H7z"/>'
-    : '<path d="M7 10l5 5 5-5H7z"/>';
+  setSvgPath(icon, sortDir === "asc" ? SVG.sortAsc : SVG.sortDesc);
   $("exportFormat").value = exportFormat;
 }
 function syncSort() {
