@@ -1,5 +1,6 @@
 {
   "name": "dofiltor",
+  "version": "3.5.3",
   "private": true,
   "description": "Dofiltor browser extension — dev scripts only",
   "scripts": {

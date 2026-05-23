@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+## 3.5.3
+
+- Removed `popup.js` entirely; side panel loads `ui-panel.js` (breaks stale `popup.js?v=3.5.0` cache).
+
+## 3.5.2
+
+- Side panel entry moved to `panel.html` (stops stale cached `popup.js?v=3.5.0` from crashing init). `popup.html` redirects to `panel.html`.
+
+## 3.5.1
+
+- UI script renamed to `panel.js` (avoids stale cached `popup.js` in the side panel).
+- Fix popup/side panel crash when UI elements are missing (`bindEl` / `bindClick` guards on all listeners).
+- Chrome **Side Panel**: toolbar icon opens the collector UI in the browser side panel (stays open while you browse search results). Reuses `popup.html`; requires Chrome 114+.
+- Scope bar **Reload tab** button for stale content script after extension reload.
+
+## 3.5.0
+
+- Popup detects a stale content script after an extension reload and shows **Reload tab** on the scope bar (auto-next and collection resume after reload).
 - Unit tests for `migrateFileTypes`, `normalizeDorkQuery`, and `lookupDorkCaptureFromData` (`npm test`).
 - Five-minute release smoke checklist in `docs/release-checklist.md`.
 - Content script debug logs gated behind `localStorage.dofiltor_debug = "1"` (`dlog()`); warnings unchanged.
@@ -16,9 +34,6 @@
 - Warn when the current tab's dork query was already captured before (scope bar in popup + optional notification on the search page).
 - Show a **Checking** state on rows while URL validation is in progress (manual validate and auto-validate).
 - Provider rule test: **Use active tab** fills the URL from the current browser tab; results show per-rule pass/fail aligned with real collection (host/path), plus query-param and enabled checks.
-
-## 3.5.0
-
 - Expanded default capture extensions for generic office formats: OpenDocument (ODP, ODG, ODF, ODB, flat ODF), Microsoft Office templates and macro-enabled files, legacy StarOffice, and other suites (WordPerfect, AbiWord, HWP, Apple iWork).
 - Centralized default file-type list and badge styling groups in `file-types.js`.
 - On extension update/startup, merge newly shipped default file extensions into saved settings without removing user-custom entries (`fileTypesVersion` tracks incremental additions).

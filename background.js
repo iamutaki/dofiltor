@@ -1,14 +1,15 @@
-// background.js — Dork File Collector v3.0.1 (dofiltor)
+// background.js — Dork File Collector v3.5.0 (dofiltor)
 
 const STORAGE_KEY = "dofiltor_urls";
 const SETTINGS_KEY = "dofiltor_settings";
 const HISTORY_KEY = "dofiltor_history";
 const GLOBAL_STATS_KEY = "dofiltor_global_stats";
 const VALIDATION_CACHE_KEY = "dofiltor_validation_cache";
+const AUTO_NEXT_ALERT_KEY = "dofiltor_auto_next_alert";
 const CSV_COLUMNS = ["url", "file_type", "query", "source_page", "discovered_at", "size"];
 importScripts("file-types.js", "dork-utils.js");
 const DEFAULT_PROVIDERS = [
-  { id: "google", name: "Google", enabled: true, hostContains: "google.", pathContains: "/search", queryParam: "q", nextSelector: "#pnnext" },
+  { id: "google", name: "Google", enabled: true, hostContains: "google.", pathContains: "/search", queryParam: "q", nextSelector: "#pnnext, a#pnnext, a[aria-label=\"Next page\"], a[aria-label=\"Halaman berikutnya\"]" },
   { id: "bing", name: "Bing", enabled: true, hostContains: "bing.com", pathContains: "/search", queryParam: "q", nextSelector: "a.sb_pagN" },
   { id: "duckduckgo", name: "DuckDuckGo", enabled: true, hostContains: "duckduckgo.com", pathContains: "/", queryParam: "q", nextSelector: "a[rel='next']" },
   { id: "yahoo", name: "Yahoo", enabled: false, hostContains: "search.yahoo.com", pathContains: "/search", queryParam: "p", nextSelector: "a.next" },
@@ -27,6 +28,7 @@ const DEFAULT_SETTINGS = {
   validateDelay: 1500,
   validateMode: "head-get",
   notifications: true,
+  skipVisitedResults: true,
   enabled: true,
   fileTypes: DEFAULT_FILE_TYPES,
   providers: DEFAULT_PROVIDERS,
@@ -406,13 +408,21 @@ function lookupDorkCapture(query) {
 function resolveSettings(stored) {
   const raw = stored || {};
   const migration = migrateFileTypes(raw.fileTypes, raw.fileTypesVersion);
+  const providers = Array.isArray(raw.providers) && raw.providers.length ? raw.providers : DEFAULT_PROVIDERS;
+  const migratedProviders = providers.map((provider) => {
+    if (provider?.id === "google" && provider.nextSelector === "#pnnext") {
+      return { ...provider, nextSelector: DEFAULT_PROVIDERS[0].nextSelector };
+    }
+    return provider;
+  });
+  const providersChanged = migratedProviders.some((provider, index) => provider !== providers[index]);
   return {
     ...DEFAULT_SETTINGS,
     ...raw,
     fileTypes: migration.fileTypes,
     fileTypesVersion: migration.fileTypesVersion,
-    providers: Array.isArray(raw.providers) && raw.providers.length ? raw.providers : DEFAULT_PROVIDERS,
-    _migrationChanged: migration.changed,
+    providers: migratedProviders,
+    _migrationChanged: migration.changed || providersChanged,
   };
 }
 
@@ -499,11 +509,18 @@ function syncDynamicContentScripts(settings) {
     .catch((error) => ({ ok: false, error: error && error.message ? error.message : String(error) }));
 }
 
+function initSidePanel() {
+  if (!chrome.sidePanel?.setPanelBehavior) return;
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+}
+
 chrome.runtime.onInstalled.addListener(() => {
+  initSidePanel();
   runSettingsMigration().then(syncDynamicContentScripts);
 });
 
 chrome.runtime.onStartup.addListener(() => {
+  initSidePanel();
   runSettingsMigration().then(syncDynamicContentScripts);
 });
 
@@ -766,15 +783,32 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     autoNextStatus = { status: msg.status, page: msg.page || 0, next: msg.next || 0, message: msg.message || "", time: Date.now() };
 
     if (msg.status === "done" || msg.status === "end") {
+      const alertPayload = {
+        status: msg.status,
+        page: msg.page || 0,
+        message: msg.message || "Auto-next stopped",
+        time: Date.now(),
+      };
+      chrome.storage.local.set({ [AUTO_NEXT_ALERT_KEY]: alertPayload });
+      try {
+        chrome.runtime.sendMessage({ type: "AUTO_NEXT_DONE", ...alertPayload });
+      } catch (e) { /* no panel listener */ }
+
       Promise.all([getUrls(), getSettings()]).then(([urls, settings]) => {
         if (!settings.notifications) return;
+        const iconUrl = chrome.runtime.getURL("icons/icon128.png");
         chrome.notifications.create("dork-done", {
-          type: "basic", iconUrl: "icons/icon128.png",
+          type: "basic",
+          iconUrl,
           title: "Dork File Collector \u2014 Done",
-          message: (msg.message || "Auto-next stopped") + ". " + urls.length + " URLs total.",
+          message: alertPayload.message + ". " + urls.length + " URLs total.",
           priority: 2,
+        }, () => {
+          if (chrome.runtime.lastError) {
+            console.warn("[Dofiltor] notification:", chrome.runtime.lastError.message);
+          }
         });
-        setTimeout(() => chrome.notifications.clear("dork-done"), 5000);
+        setTimeout(() => chrome.notifications.clear("dork-done"), 8000);
       });
     }
 

@@ -1,6 +1,6 @@
 const SETTINGS_KEY = "dofiltor_settings";
 const DEFAULT_PROVIDERS = [
-  { id: "google", name: "Google", enabled: true, hostContains: "google.", pathContains: "/search", queryParam: "q", nextSelector: "#pnnext" },
+  { id: "google", name: "Google", enabled: true, hostContains: "google.", pathContains: "/search", queryParam: "q", nextSelector: "#pnnext, a#pnnext, a[aria-label=\"Next page\"], a[aria-label=\"Halaman berikutnya\"]" },
   { id: "bing", name: "Bing", enabled: true, hostContains: "bing.com", pathContains: "/search", queryParam: "q", nextSelector: "a.sb_pagN" },
   { id: "duckduckgo", name: "DuckDuckGo", enabled: true, hostContains: "duckduckgo.com", pathContains: "/", queryParam: "q", nextSelector: "a[rel='next']" },
   { id: "yahoo", name: "Yahoo", enabled: false, hostContains: "search.yahoo.com", pathContains: "/search", queryParam: "p", nextSelector: "a.next" },
@@ -18,6 +18,7 @@ const DEFAULT_SETTINGS = {
   validateDelay: 1500,
   validateMode: "head-get",
   notifications: true,
+  skipVisitedResults: true,
   reuseValidationCache: false,
   urlCacheMaxEntries: 5000,
   urlCacheMaxAgeDays: 0,
@@ -421,6 +422,7 @@ async function save() {
     validateDelay: Math.max(0, parseInt($("validateDelay").value, 10) || DEFAULT_SETTINGS.validateDelay),
     validateMode: $("validateMode").value || DEFAULT_SETTINGS.validateMode,
     notifications: $("notifications").checked,
+    skipVisitedResults: $("skipVisitedResults").checked,
     reuseValidationCache: $("reuseValidationCache").checked,
     urlCacheMaxEntries: Math.max(100, parseInt($("urlCacheMaxEntries").value, 10) || DEFAULT_SETTINGS.urlCacheMaxEntries),
     urlCacheMaxAgeDays: Math.max(0, parseInt($("urlCacheMaxAgeDays").value, 10) || 0),
@@ -456,6 +458,7 @@ async function resetDefaults() {
   $("validateDelay").value = DEFAULT_SETTINGS.validateDelay;
   $("validateMode").value = DEFAULT_SETTINGS.validateMode;
   $("notifications").checked = DEFAULT_SETTINGS.notifications;
+  $("skipVisitedResults").checked = DEFAULT_SETTINGS.skipVisitedResults;
   $("reuseValidationCache").checked = DEFAULT_SETTINGS.reuseValidationCache;
   $("urlCacheMaxEntries").value = DEFAULT_SETTINGS.urlCacheMaxEntries;
   $("urlCacheMaxAgeDays").value = DEFAULT_SETTINGS.urlCacheMaxAgeDays;
@@ -514,6 +517,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("validateDelay").value = settings.validateDelay;
   $("validateMode").value = settings.validateMode || DEFAULT_SETTINGS.validateMode;
   $("notifications").checked = !!settings.notifications;
+  $("skipVisitedResults").checked = settings.skipVisitedResults !== false;
   $("reuseValidationCache").checked = settings.reuseValidationCache === true;
   $("urlCacheMaxEntries").value = settings.urlCacheMaxEntries ?? DEFAULT_SETTINGS.urlCacheMaxEntries;
   $("urlCacheMaxAgeDays").value = settings.urlCacheMaxAgeDays ?? DEFAULT_SETTINGS.urlCacheMaxAgeDays;
@@ -521,7 +525,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("fileTypes").value = settings.fileTypes.join("\n");
   $("version").textContent = typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.getManifest
     ? chrome.runtime.getManifest().version
-    : "3.5.0";
+    : "3.5.3";
   renderProviders();
   applyI18n();
   localizeOptions();
@@ -546,7 +550,7 @@ function localizeOptions() {
   const labels = document.querySelectorAll(".label");
   const labelKeys = [
     "theme", "language", "autoNext", "maxPages", "pageDelay", "autoValidate",
-    "validationDelay", "validationMode", "notifications",
+    "validationDelay", "validationMode", "notifications", "skipVisitedResults",
     "dorkHistoryMax",
     "reuseValidationCache", "urlCacheMaxEntries", "urlCacheMaxAgeDays",
     "fileExtensions",
@@ -559,6 +563,7 @@ function localizeOptions() {
   const hintKeys = [
     "themeHint", "languageHint", "autoNextHint", "maxPagesHint", "pageDelayHint",
     "autoValidateHint", "validationDelayHint", "validationModeHint", "notificationsHint",
+    "skipVisitedResultsHint",
     "dorkHistoryMaxHint",
     "reuseValidationCacheHint", "urlCacheMaxEntriesHint", "urlCacheMaxAgeDaysHint",
     "fileExtensionsHint",

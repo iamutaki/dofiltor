@@ -74,6 +74,10 @@
 
 [![Download ZIP](https://img.shields.io/badge/download-.zip-333?style=flat-square&logo=github)](https://github.com/iamutaki/dofiltor/releases/latest)
 
+### Side panel (Chrome 114+)
+
+Click the toolbar icon to open Dofiltor in Chrome’s **side panel** (right edge of the window). Unlike the old toolbar popup, the panel stays open while you click through Google/Bing results—handy for auto-next and watching collected URLs update in real time. Resize the panel edge to make it wider or narrower.
+
 ---
 
 ## Translations

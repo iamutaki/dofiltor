@@ -1,7 +1,8 @@
-// popup.js — Dork File Collector v3.5.0 (dofiltor)
+// ui-panel.js — Dork File Collector v3.5.3 (dofiltor) — side panel UI
 
 const STORAGE_KEY = "dofiltor_urls";
 const SETTINGS_KEY = "dofiltor_settings";
+const AUTO_NEXT_ALERT_KEY = "dofiltor_auto_next_alert";
 const DEFAULT_SETTINGS = {
   autoNext: false,
   maxPages: 50,
@@ -10,6 +11,7 @@ const DEFAULT_SETTINGS = {
   validateDelay: 1500,
   validateMode: "head-get",
   notifications: true,
+  skipVisitedResults: true,
   enabled: true,
   reuseValidationCache: false,
   urlCacheMaxEntries: 5000,
@@ -17,7 +19,7 @@ const DEFAULT_SETTINGS = {
   dorkHistoryMax: 200,
   fileTypes: DEFAULT_FILE_TYPES,
   providers: [
-    { id: "google", name: "Google", enabled: true, hostContains: "google.", pathContains: "/search", queryParam: "q", nextSelector: "#pnnext" },
+    { id: "google", name: "Google", enabled: true, hostContains: "google.", pathContains: "/search", queryParam: "q", nextSelector: "#pnnext, a#pnnext, a[aria-label=\"Next page\"], a[aria-label=\"Halaman berikutnya\"]" },
     { id: "bing", name: "Bing", enabled: true, hostContains: "bing.com", pathContains: "/search", queryParam: "q", nextSelector: "a.sb_pagN" },
     { id: "duckduckgo", name: "DuckDuckGo", enabled: true, hostContains: "duckduckgo.com", pathContains: "/", queryParam: "q", nextSelector: "a[rel='next']" },
     { id: "yahoo", name: "Yahoo", enabled: false, hostContains: "search.yahoo.com", pathContains: "/search", queryParam: "p", nextSelector: "a.next" },
@@ -96,6 +98,12 @@ const XLSX_FILES = {
 };
 
 function $(id) { return document.getElementById(id); }
+function bindEl(id, type, handler, options) {
+  const el = $(id);
+  if (el) el.addEventListener(type, handler, options);
+}
+function bindClick(id, handler) { bindEl(id, "click", handler); }
+function bindChange(id, handler) { bindEl(id, "change", handler); }
 function setSvgPath(svg, pathData) {
   if (!svg) return;
   svg.textContent = "";
@@ -278,13 +286,35 @@ function formatDorkWhen(iso) {
     return "";
   }
 }
-function activeTabUrl() {
-  if (!hasChromeTabs()) return Promise.resolve("");
+function activeTab() {
+  if (!hasChromeTabs()) return Promise.resolve(null);
   return new Promise((resolve) => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      resolve(tabs && tabs[0] ? tabs[0].url || "" : "");
+      resolve(tabs && tabs[0] ? tabs[0] : null);
     });
   });
+}
+function activeTabUrl() {
+  return activeTab().then((tab) => (tab && tab.url) || "");
+}
+function pingContentScript(tabId) {
+  return new Promise((resolve) => {
+    if (!hasChromeTabs() || tabId == null) {
+      resolve({ alive: false });
+      return;
+    }
+    chrome.tabs.sendMessage(tabId, { type: "GET_PAGE_INFO" }, (resp) => {
+      if (chrome.runtime.lastError) {
+        resolve({ alive: false });
+        return;
+      }
+      resolve({ alive: !!(resp && !resp.error) });
+    });
+  });
+}
+function setScopeReloadVisible(show) {
+  const btn = $("scopeReloadBtn");
+  if (btn) btn.hidden = !show;
 }
 function hasProviderPermission(provider) {
   const host = providerHostBase(provider.hostContains);
@@ -301,11 +331,13 @@ function setScope(status, text) {
   label.textContent = text;
 }
 async function updateScopeIndicator() {
+  setScopeReloadVisible(false);
   if (!extensionEnabled) {
     setScope("paused", t("scopePaused"));
     return;
   }
-  const url = await activeTabUrl();
+  const tab = await activeTab();
+  const url = (tab && tab.url) || "";
   const provider = (settings.providers || []).find((item) => providerMatchesUrl(item, url));
   if (!provider) {
     setScope("unsupported", t("scopeUnsupported"));
@@ -315,6 +347,14 @@ async function updateScopeIndicator() {
   if (!hasPermission) {
     setScope("permission", t("scopePermissionNeeded", { provider: provider.name || provider.id || "Provider" }));
     return;
+  }
+  if (tab && tab.id != null) {
+    const ping = await pingContentScript(tab.id);
+    if (!ping.alive) {
+      setScope("stale", t("scopeStale"));
+      setScopeReloadVisible(true);
+      return;
+    }
   }
   const dorkQuery = getDorkQueryFromUrl(url, provider);
   if (dorkQuery) {
@@ -1199,6 +1239,7 @@ async function syncSettings() {
     validateDelay: Math.max(0, parseInt($("validateDelay").value, 10) || 0),
     autoValidate: $("autoValidate").checked,
     notifications: $("notifications").checked,
+    skipVisitedResults: $("skipVisitedResults").checked,
     reuseValidationCache: $("reuseValidationCache").checked,
   });
   settings.reuseValidationCache = $("reuseValidationCache").checked;
@@ -1226,15 +1267,42 @@ async function toggleAutoNext() {
   updateAutoNextUI(autoNextEnabled, null);
   updateAutoNextStatus();
 }
+function showDoneBanner(payload) {
+  const banner = $("doneBanner");
+  const text = $("doneBannerText");
+  if (!banner || !text) return;
+  const page = payload && payload.page ? " (page " + payload.page + ")" : "";
+  text.textContent = (payload && payload.message) || t("autoNextDoneDefault");
+  text.textContent += page;
+  banner.classList.add("show");
+}
+
+function hideDoneBanner() {
+  const banner = $("doneBanner");
+  if (banner) banner.classList.remove("show");
+}
+
+function handleAutoNextDone(payload) {
+  if (!payload || (payload.status !== "done" && payload.status !== "end")) return;
+  showDoneBanner(payload);
+  if (autoNextEnabled) {
+    autoNextEnabled = false;
+    saveSettings({ ...settings, autoNext: false });
+  }
+  setStatus(payload.message || t("autoNextDoneDefault"));
+  updateAutoNextUI(false, payload);
+}
+
 async function updateAutoNextStatus() {
   const status = await sendMessage({ type: "GET_AUTO_NEXT_STATUS" });
   if (!status) return;
-  if ((status.status === "done" || status.status === "end") && autoNextEnabled) {
-    autoNextEnabled = false;
-    await saveSettings({ ...settings, autoNext: false });
-    setStatus(status.message || "Done");
+  if (status.status === "done" || status.status === "end") {
+    handleAutoNextDone(status);
+    return;
   }
-  updateAutoNextUI(autoNextEnabled, status);
+  const tab = await activeTab();
+  const contentAlive = tab && tab.id != null ? (await pingContentScript(tab.id)).alive : false;
+  updateAutoNextUI(autoNextEnabled, contentAlive ? status : null);
 }
 async function updateCaptchaBanner() {
   const status = await sendMessage({ type: "GET_CAPTCHA_STATUS" });
@@ -1306,57 +1374,62 @@ function initTooltip() {
   });
 }
 
-document.addEventListener("DOMContentLoaded", async () => {
-  $("themeToggle").addEventListener("click", cycleTheme);
-  $("pwrToggle").addEventListener("click", togglePower);
-  $("btnGithub").addEventListener("click", () => openExternalPage("https://github.com/iamutaki/dofiltor"));
-  $("btnValidate").addEventListener("click", startValidate);
-  $("btnExport").addEventListener("click", exportCurrent);
-  $("btnExportSelected").addEventListener("click", exportSelected);
-  $("btnSelectVisible").addEventListener("click", selectVisible);
-  $("btnUnselectAll").addEventListener("click", unselectAll);
-  $("typesStat").addEventListener("click", openTypeDialog);
-  $("typesStat").addEventListener("keydown", (e) => {
+function initPopupUi() {
+  bindClick("themeToggle", cycleTheme);
+  bindClick("pwrToggle", togglePower);
+  bindClick("btnGithub", () => openExternalPage("https://github.com/iamutaki/dofiltor"));
+  bindClick("btnValidate", startValidate);
+  bindClick("btnExport", exportCurrent);
+  bindClick("btnExportSelected", exportSelected);
+  bindClick("btnSelectVisible", selectVisible);
+  bindClick("btnUnselectAll", unselectAll);
+  bindEl("typesStat", "click", openTypeDialog);
+  bindEl("typesStat", "keydown", (e) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
       openTypeDialog();
     }
   });
-  $("typeDialogClose").addEventListener("click", closeTypeDialog);
-  $("typeDialog").addEventListener("click", (e) => {
+  bindClick("typeDialogClose", closeTypeDialog);
+  bindEl("typeDialog", "click", (e) => {
     if (e.target.id === "typeDialog") closeTypeDialog();
   });
-  $("btnCopy").addEventListener("click", copyUrls);
-  $("btnBatchDl").addEventListener("click", batchDownload);
-  $("btnHistory").addEventListener("click", showHistory);
-  $("btnRemoveDead").addEventListener("click", removeDead);
-  $("btnClear").addEventListener("click", clearAll);
-  $("btnSettings").addEventListener("click", toggleSettingsPanel);
-  $("btnAbout").addEventListener("click", () => openExtensionPage("options.html#about"));
-  $("sortKey").addEventListener("change", syncSort);
-  $("sortDirBtn").addEventListener("click", toggleSortDir);
-  $("exportFormat").addEventListener("change", () => {
-    exportFormat = $("exportFormat").value;
+  bindClick("btnCopy", copyUrls);
+  bindClick("btnBatchDl", batchDownload);
+  bindClick("btnHistory", showHistory);
+  bindClick("btnRemoveDead", removeDead);
+  bindClick("btnClear", clearAll);
+  bindClick("btnSettings", toggleSettingsPanel);
+  bindClick("btnAbout", () => openExtensionPage("options.html#about"));
+  bindChange("sortKey", syncSort);
+  bindClick("sortDirBtn", toggleSortDir);
+  bindChange("exportFormat", () => {
+    const sel = $("exportFormat");
+    if (!sel) return;
+    exportFormat = sel.value;
     localStorage.setItem("dofiltor_export_format", exportFormat);
   });
-  $("pageDelay").addEventListener("change", syncSettings);
-  $("validateDelay").addEventListener("change", syncSettings);
-  if ($("reuseValidationCache")) $("reuseValidationCache").addEventListener("change", syncSettings);
-  $("autoValidate").addEventListener("change", syncSettings);
-  $("notifications").addEventListener("change", syncSettings);
-  $("maxPages").addEventListener("change", syncSettings);
-  $("autoNextBtn").addEventListener("click", toggleAutoNext);
-  $("urlList").addEventListener("scroll", scheduleRenderList);
-  $("domainBar").addEventListener("wheel", (e) => {
+  bindChange("pageDelay", syncSettings);
+  bindChange("validateDelay", syncSettings);
+  bindChange("reuseValidationCache", syncSettings);
+  bindChange("autoValidate", syncSettings);
+  bindChange("notifications", syncSettings);
+  bindChange("skipVisitedResults", syncSettings);
+  bindChange("maxPages", syncSettings);
+  bindClick("autoNextBtn", toggleAutoNext);
+  bindEl("urlList", "scroll", scheduleRenderList);
+  bindEl("domainBar", "wheel", (e) => {
     const bar = $("domainBar");
-    if (!bar.classList.contains("show") || bar.scrollWidth <= bar.clientWidth) return;
+    if (!bar || !bar.classList.contains("show") || bar.scrollWidth <= bar.clientWidth) return;
     if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
     e.preventDefault();
     bar.scrollLeft += e.deltaY;
   }, { passive: false });
   document.addEventListener("keydown", onKeyboard);
 
-  $("captchaShow").addEventListener("click", () => {
+  bindClick("doneBannerDismiss", hideDoneBanner);
+
+  bindClick("captchaShow", () => {
     if (!hasChromeTabs()) return;
     const patterns = (settings.providers || [])
       .filter((provider) => provider.enabled && provider.hostContains)
@@ -1369,18 +1442,35 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   });
 
+  const scopeBar = $("scopeBar");
+  if (scopeBar) {
+    scopeBar.addEventListener("click", (e) => {
+      if (!e.target.closest("#scopeReloadBtn")) return;
+      if (!hasChromeTabs()) return;
+      activeTab().then((tab) => {
+        if (tab && tab.id != null) chrome.tabs.reload(tab.id);
+      });
+    });
+  }
+
   let searchTimer;
-  $("searchInput").addEventListener("input", () => {
+  bindEl("searchInput", "input", () => {
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => {
-      searchQuery = $("searchInput").value.trim();
+      const input = $("searchInput");
+      searchQuery = input ? input.value.trim() : "";
       updateFilterAction();
       selectedIndex = -1;
-      $("urlList").scrollTop = 0;
+      const list = $("urlList");
+      if (list) list.scrollTop = 0;
       refresh();
     }, 150);
   });
-  $("searchClear").addEventListener("click", clearFilters);
+  bindClick("searchClear", clearFilters);
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
+  initPopupUi();
 
   applyTheme(loadTheme());
   await initI18n();
@@ -1390,9 +1480,20 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   if (hasChromeStorage()) {
     chrome.storage.onChanged.addListener((changes, area) => {
-      if (area !== "local" || !changes[STORAGE_KEY]) return;
-      allUrls = dedupeUrls(changes[STORAGE_KEY].newValue || []);
-      if (!validating) refresh();
+      if (area !== "local") return;
+      if (changes[STORAGE_KEY]) {
+        allUrls = dedupeUrls(changes[STORAGE_KEY].newValue || []);
+        if (!validating) refresh();
+      }
+      if (changes[AUTO_NEXT_ALERT_KEY]?.newValue) {
+        handleAutoNextDone(changes[AUTO_NEXT_ALERT_KEY].newValue);
+      }
+    });
+  }
+
+  if (hasChromeRuntime()) {
+    chrome.runtime.onMessage.addListener((msg) => {
+      if (msg && msg.type === "AUTO_NEXT_DONE") handleAutoNextDone(msg);
     });
   }
 
@@ -1407,6 +1508,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     $("validateDelay").value = settings.validateDelay;
     $("autoValidate").checked = !!settings.autoValidate;
     $("notifications").checked = !!settings.notifications;
+    if ($("skipVisitedResults")) {
+      $("skipVisitedResults").checked = settings.skipVisitedResults !== false;
+    }
     if ($("reuseValidationCache")) {
       $("reuseValidationCache").checked = settings.reuseValidationCache === true;
     }
@@ -1415,6 +1519,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     updateScopeIndicator();
     updateCaptchaBanner();
     updateAutoNextStatus();
+    if (hasChromeStorage()) {
+      chrome.storage.local.get(AUTO_NEXT_ALERT_KEY, (res) => {
+        const alert = res && res[AUTO_NEXT_ALERT_KEY];
+        if (alert && alert.time && Date.now() - alert.time < 120000) {
+          handleAutoNextDone(alert);
+        }
+      });
+    }
     pollBatchStatus();
   }).catch((e) => { console.error("Init error:", e); refresh(); });
 

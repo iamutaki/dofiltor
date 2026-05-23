@@ -2,21 +2,24 @@
   "manifest_version": 3,
   "name": "__MSG_extensionName__",
   "description": "__MSG_extensionDescription__",
-  "version": "3.5.0",
+  "version": "3.5.3",
   "default_locale": "en",
   "permissions": [
     "storage",
     "scripting",
     "downloads",
     "tabs",
-    "notifications"
+    "notifications",
+    "sidePanel"
   ],
+  "side_panel": {
+    "default_path": "panel.html"
+  },
   "optional_host_permissions": [
     "http://*/*",
     "https://*/*"
   ],
   "action": {
-    "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
