@@ -6,7 +6,7 @@
 <p align="center"><strong>Dork File Collector</strong></p>
 
 <p align="center">
-  <img alt="Version" src="https://img.shields.io/badge/version-3.4.6-blue">
+  <img alt="Version" src="https://img.shields.io/badge/version-3.5.0-blue">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
   <img alt="Manifest" src="https://img.shields.io/badge/manifest-v3-orange">
   <img alt="Chrome" src="https://img.shields.io/badge/chrome-%E2%89%A588-4285F4?logo=googlechrome&logoColor=white">

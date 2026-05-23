@@ -3,10 +3,6 @@
  * Extracts document URLs, auto-next page, and handles CAPTCHA detection.
  */
 
-const DEFAULT_FILE_TYPES = [
-  "pdf", "xls", "xlsx", "doc", "docx", "txt", "csv",
-  "ppt", "pptx", "odt", "ods", "rtf",
-];
 const DEFAULT_PROVIDERS = [
   { id: "google", name: "Google", enabled: true, hostContains: "google.", pathContains: "/search", queryParam: "q", nextSelector: "#pnnext" },
   { id: "bing", name: "Bing", enabled: true, hostContains: "bing.com", pathContains: "/search", queryParam: "q", nextSelector: "a.sb_pagN" },
@@ -128,9 +124,11 @@ try {
 // --- Helpers ---
 
 function normalizeSettings(raw) {
+  const migration = migrateFileTypes(raw.fileTypes, raw.fileTypesVersion);
   return {
     ...raw,
-    fileTypes: Array.isArray(raw.fileTypes) && raw.fileTypes.length ? raw.fileTypes : DEFAULT_FILE_TYPES,
+    fileTypes: migration.fileTypes,
+    fileTypesVersion: migration.fileTypesVersion,
     providers: Array.isArray(raw.providers) && raw.providers.length ? raw.providers : DEFAULT_PROVIDERS,
   };
 }
@@ -346,7 +344,7 @@ function scan() {
     if (!response) return;
     if (response.added > 0) {
       sendMsg({ type: "UPDATE_BADGE", count: response.total });
-      if (response.new_urls) {
+      if (settings.autoValidate && response.new_urls) {
         for (const url of response.new_urls) {
           sendMsg({ type: "AUTO_CHECK_URL", url: url });
         }

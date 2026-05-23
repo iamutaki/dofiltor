@@ -43,8 +43,11 @@ Dofiltor requests browser permissions only to support its core features:
 
 - `storage` is used to save local settings, collected URLs, and history.
 - `tabs` is used to open extension pages and focus supported provider tabs from the popup.
+- `scripting` is used to register the content script for user-added provider hosts after the user grants optional host access.
 - `downloads` is used when the user starts file downloads.
 - `notifications` is used for optional collection, CAPTCHA, and completion notifications.
+
+For custom providers, Dofiltor may request optional access to the specific provider host configured by the user. This access is used only to run the collector on that provider's result pages.
 
 ## User Control
 

@@ -3,11 +3,10 @@
 const STORAGE_KEY = "dofiltor_urls";
 const SETTINGS_KEY = "dofiltor_settings";
 const HISTORY_KEY = "dofiltor_history";
+const GLOBAL_STATS_KEY = "dofiltor_global_stats";
+const VALIDATION_CACHE_KEY = "dofiltor_validation_cache";
 const CSV_COLUMNS = ["url", "file_type", "query", "source_page", "discovered_at", "size"];
-const DEFAULT_FILE_TYPES = [
-  "pdf", "xls", "xlsx", "doc", "docx", "txt", "csv",
-  "ppt", "pptx", "odt", "ods", "rtf",
-];
+importScripts("file-types.js");
 const DEFAULT_PROVIDERS = [
   { id: "google", name: "Google", enabled: true, hostContains: "google.", pathContains: "/search", queryParam: "q", nextSelector: "#pnnext" },
   { id: "bing", name: "Bing", enabled: true, hostContains: "bing.com", pathContains: "/search", queryParam: "q", nextSelector: "a.sb_pagN" },
@@ -15,16 +14,26 @@ const DEFAULT_PROVIDERS = [
   { id: "yahoo", name: "Yahoo", enabled: false, hostContains: "search.yahoo.com", pathContains: "/search", queryParam: "p", nextSelector: "a.next" },
   { id: "yandex", name: "Yandex", enabled: false, hostContains: "yandex.", pathContains: "/search", queryParam: "text", nextSelector: "a[aria-label='Next page']" },
 ];
+const STATIC_PROVIDER_HOSTS = new Set([
+  "google.com", "google.co.id", "bing.com", "duckduckgo.com",
+  "search.yahoo.com", "yandex.com", "yandex.ru",
+]);
+const DYNAMIC_CONTENT_SCRIPT_ID = "dofiltor-dynamic-providers";
 const DEFAULT_SETTINGS = {
   autoNext: false,
   maxPages: 50,
   pageDelay: 3000,
   autoValidate: true,
   validateDelay: 1500,
+  validateMode: "head-get",
   notifications: true,
   enabled: true,
   fileTypes: DEFAULT_FILE_TYPES,
   providers: DEFAULT_PROVIDERS,
+  reuseValidationCache: true,
+  urlCacheMaxEntries: 5000,
+  urlCacheMaxAgeDays: 0,
+  dorkHistoryMax: 200,
 };
 
 let captchaStatus = { active: false, url: null };
@@ -36,30 +45,69 @@ let autoValidateBusy = false;
 function getUrls() {
   return new Promise((resolve) => {
     chrome.storage.local.get(STORAGE_KEY, (result) => {
-      resolve(result[STORAGE_KEY] || []);
+      resolve(dedupeUrls(result[STORAGE_KEY] || []));
     });
   });
 }
 
 function saveUrls(urls) {
   return new Promise((resolve) => {
-    chrome.storage.local.set({ [STORAGE_KEY]: urls }, resolve);
+    chrome.storage.local.set({ [STORAGE_KEY]: dedupeUrls(urls) }, resolve);
   });
 }
 
-function addUrls(incoming) {
-  return getUrls().then((existing) => {
-    const seen = new Set(existing.map((r) => r.url));
-    const newItems = incoming.filter((r) => !seen.has(r.url));
-    if (newItems.length === 0) {
-      return { added: 0, total: existing.length, new_urls: [] };
+function normalizeFileUrl(url) {
+  try {
+    const parsed = new URL(url);
+    parsed.hash = "";
+    return parsed.href;
+  } catch (e) {
+    return String(url || "").split("#")[0];
+  }
+}
+
+function dedupeUrls(urls) {
+  const byUrl = new Map();
+  const clean = [];
+  for (const item of Array.isArray(urls) ? urls : []) {
+    const url = normalizeFileUrl(item && item.url);
+    if (!url) continue;
+    if (byUrl.has(url)) {
+      const existing = byUrl.get(url);
+      Object.assign(existing, Object.fromEntries(Object.entries(item || {}).filter(([, value]) => value != null && value !== "")));
+      existing.url = url;
+      continue;
     }
-    const merged = existing.concat(newItems);
-    return saveUrls(merged).then(() => ({
-      added: newItems.length,
-      total: merged.length,
-      new_urls: newItems.map((r) => r.url),
-    }));
+    const next = { ...item, url };
+    byUrl.set(url, next);
+    clean.push(next);
+  }
+  return clean;
+}
+
+function addUrls(incoming) {
+  return Promise.all([getSettings(), getValidationCache()]).then(([settings, cache]) => {
+    return getUrls().then((existing) => {
+      const seen = new Set(existing.map((r) => r.url));
+      const newItems = dedupeUrls(incoming).filter((r) => !seen.has(r.url));
+      for (const item of newItems) {
+        applyCachedValidation(item, cache, settings);
+      }
+      if (newItems.length === 0) {
+        return { added: 0, total: existing.length, new_urls: [], cache_applied: 0 };
+      }
+      if (newItems.length > 0) {
+        incrementGlobalStats({ grabbed: newItems.length });
+      }
+      const merged = existing.concat(newItems);
+      const cacheApplied = newItems.filter((item) => item.status).length;
+      return saveUrls(merged).then(() => ({
+        added: newItems.length,
+        total: merged.length,
+        new_urls: newItems.map((r) => r.url),
+        cache_applied: cacheApplied,
+      }));
+    });
   });
 }
 
@@ -86,28 +134,19 @@ function exportData(urls, format, domain) {
   if (!filtered.length) return null;
   if (format === "txt") return filtered.map((u) => u.url).join("\n");
   if (format === "json") return JSON.stringify(filtered, null, 2);
-  if (format === "domain-json") {
-    const grouped = {};
-    for (const item of filtered) {
-      let host = "unknown";
-      try { host = new URL(item.url).hostname; } catch (e) { /* keep unknown */ }
-      if (!grouped[host]) grouped[host] = [];
-      grouped[host].push(item);
-    }
-    return JSON.stringify(grouped, null, 2);
-  }
   return toCSV(filtered);
 }
 
 // --- URL check with size ---
 
-function checkUrl(url) {
+function checkUrl(url, mode) {
   return fetch(url, { method: "HEAD", mode: "no-cors", redirect: "follow" })
     .then((resp) => {
       const size = resp.headers.get("content-length");
-      return { ok: true, size: size ? parseInt(size) : null };
+      return { ok: true, size: size ? parseInt(size, 10) : null };
     })
     .catch(() => {
+      if (mode === "head") return { ok: false, size: null };
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 10000);
       return fetch(url, { method: "GET", mode: "no-cors", signal: controller.signal })
@@ -116,15 +155,123 @@ function checkUrl(url) {
     });
 }
 
-function autoCheckUrl(url) {
-  checkUrl(url).then((result) => {
-    getUrls().then((urls) => {
-      const item = urls.find((u) => u.url === url);
-      if (item) {
-        item.status = result.ok ? "ok" : "fail";
-        if (result.size) item.size = result.size;
-        saveUrls(urls);
+function cacheEntryExpired(entry, maxAgeDays) {
+  const days = Number(maxAgeDays) || 0;
+  if (!days || !entry || !entry.checkedAt) return false;
+  return (Date.now() - entry.checkedAt) > days * 86400000;
+}
+
+function getValidationCache() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(VALIDATION_CACHE_KEY, (res) => {
+      resolve(res[VALIDATION_CACHE_KEY] && typeof res[VALIDATION_CACHE_KEY] === "object"
+        ? res[VALIDATION_CACHE_KEY]
+        : {});
+    });
+  });
+}
+
+function saveValidationCache(cache) {
+  return new Promise((resolve) => {
+    chrome.storage.local.set({ [VALIDATION_CACHE_KEY]: cache }, resolve);
+  });
+}
+
+function trimValidationCache(cache, maxEntries) {
+  const limit = Math.max(100, Number(maxEntries) || DEFAULT_SETTINGS.urlCacheMaxEntries);
+  const keys = Object.keys(cache);
+  if (keys.length <= limit) return cache;
+  keys.sort((a, b) => (cache[a].checkedAt || 0) - (cache[b].checkedAt || 0));
+  const trimmed = { ...cache };
+  for (let i = 0; i < keys.length - limit; i++) {
+    delete trimmed[keys[i]];
+  }
+  return trimmed;
+}
+
+function applyCachedValidation(item, cache, settings) {
+  if (!settings.reuseValidationCache || !item || !item.url) return false;
+  const key = normalizeFileUrl(item.url);
+  const entry = cache[key];
+  if (!entry || cacheEntryExpired(entry, settings.urlCacheMaxAgeDays)) return false;
+  item.status = entry.ok ? "ok" : "fail";
+  if (entry.size) item.size = entry.size;
+  return true;
+}
+
+function rememberValidationResult(url, result, settings) {
+  if (!url || !result || result.fromCache) return Promise.resolve();
+  const key = normalizeFileUrl(url);
+  return getValidationCache().then((cache) => {
+    cache[key] = {
+      ok: !!result.ok,
+      size: result.size || null,
+      checkedAt: Date.now(),
+    };
+    return saveValidationCache(trimValidationCache(cache, settings.urlCacheMaxEntries));
+  });
+}
+
+function checkUrlWithCache(url, mode, settings) {
+  const key = normalizeFileUrl(url);
+  if (settings.reuseValidationCache) {
+    return getValidationCache().then((cache) => {
+      const entry = cache[key];
+      if (entry && !cacheEntryExpired(entry, settings.urlCacheMaxAgeDays)) {
+        incrementGlobalStats({ cacheHits: 1 });
+        return { ok: !!entry.ok, size: entry.size || null, fromCache: true };
       }
+      return checkUrl(url, mode).then((result) => {
+        incrementGlobalStats({ checked: 1 });
+        return rememberValidationResult(url, result, settings).then(() => result);
+      });
+    });
+  }
+  return checkUrl(url, mode).then((result) => {
+    incrementGlobalStats({ checked: 1 });
+    return rememberValidationResult(url, result, settings).then(() => result);
+  });
+}
+
+function getGlobalStats() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(GLOBAL_STATS_KEY, (res) => {
+      const stats = res[GLOBAL_STATS_KEY] || {};
+      resolve({
+        grabbed: Number(stats.grabbed) || 0,
+        checked: Number(stats.checked) || 0,
+        cacheHits: Number(stats.cacheHits) || 0,
+        updatedAt: stats.updatedAt || null,
+      });
+    });
+  });
+}
+
+function incrementGlobalStats(delta) {
+  return getGlobalStats().then((stats) => {
+    const next = {
+      grabbed: stats.grabbed + (Number(delta.grabbed) || 0),
+      checked: stats.checked + (Number(delta.checked) || 0),
+      cacheHits: stats.cacheHits + (Number(delta.cacheHits) || 0),
+      updatedAt: new Date().toISOString(),
+    };
+    return new Promise((resolve) => {
+      chrome.storage.local.set({ [GLOBAL_STATS_KEY]: next }, () => resolve(next));
+    });
+  });
+}
+
+function autoCheckUrl(url) {
+  getSettings().then((settings) => {
+    checkUrlWithCache(url, settings.validateMode, settings).then((result) => {
+      getUrls().then((urls) => {
+        const item = urls.find((u) => u.url === url);
+        if (item) {
+          item.status = result.ok ? "ok" : "fail";
+          if (result.size) item.size = result.size;
+          saveUrls(urls);
+        }
+      });
     });
   });
 }
@@ -134,8 +281,13 @@ function processAutoValidateQueue() {
   autoValidateBusy = true;
 
   getSettings().then((settings) => {
+    if (!settings.autoValidate) {
+      autoValidateQueue = [];
+      autoValidateBusy = false;
+      return;
+    }
     const nextUrl = autoValidateQueue.shift();
-    checkUrl(nextUrl).then((result) => {
+    checkUrlWithCache(nextUrl, settings.validateMode, settings).then((result) => {
       getUrls().then((urls) => {
         const item = urls.find((u) => u.url === nextUrl);
         if (item) {
@@ -155,9 +307,16 @@ function processAutoValidateQueue() {
 
 function enqueueAutoValidate(url) {
   getSettings().then((settings) => {
-    if (!settings.autoValidate) return;
-    if (!autoValidateQueue.includes(url)) autoValidateQueue.push(url);
-    processAutoValidateQueue();
+    if (!settings.autoValidate) {
+      autoValidateQueue = [];
+      return;
+    }
+    getUrls().then((urls) => {
+      const item = urls.find((u) => u.url === url);
+      if (item && item.status) return;
+      if (!autoValidateQueue.includes(url)) autoValidateQueue.push(url);
+      processAutoValidateQueue();
+    });
   });
 }
 
@@ -188,40 +347,137 @@ function saveHistory(h) {
   });
 }
 
-function addHistoryEntry(query, urlCount) {
-  return getHistory().then((history) => {
+function addHistoryEntry(query, urlCount, meta) {
+  meta = meta || {};
+  return getSettings().then((settings) => getHistory().then((history) => {
+    const now = new Date().toISOString();
     const existing = history.find((h) => h.query === query);
     if (existing) {
       existing.pages = (existing.pages || 0) + 1;
-      existing.urls += urlCount;
-      existing.lastScan = new Date().toISOString();
+      existing.urls = (existing.urls || 0) + urlCount;
+      existing.lastScan = now;
+      if (meta.provider) existing.provider = meta.provider;
     } else {
-      history.push({
+      history.unshift({
         query: query,
         urls: urlCount,
         pages: 1,
-        lastScan: new Date().toISOString(),
+        provider: meta.provider || null,
+        firstScan: now,
+        lastScan: now,
       });
     }
-    return saveHistory(history);
-  });
+    history.sort((a, b) => new Date(b.lastScan || 0) - new Date(a.lastScan || 0));
+    const max = Math.max(10, Number(settings.dorkHistoryMax) || DEFAULT_SETTINGS.dorkHistoryMax);
+    return saveHistory(history.slice(0, max));
+  }));
 }
 
 // --- Settings ---
 
+function resolveSettings(stored) {
+  const raw = stored || {};
+  const migration = migrateFileTypes(raw.fileTypes, raw.fileTypesVersion);
+  return {
+    ...DEFAULT_SETTINGS,
+    ...raw,
+    fileTypes: migration.fileTypes,
+    fileTypesVersion: migration.fileTypesVersion,
+    providers: Array.isArray(raw.providers) && raw.providers.length ? raw.providers : DEFAULT_PROVIDERS,
+    _migrationChanged: migration.changed,
+  };
+}
+
+function saveSettingsRecord(settings) {
+  const next = { ...settings };
+  delete next._migrationChanged;
+  return new Promise((resolve) => {
+    chrome.storage.local.set({ [SETTINGS_KEY]: next }, resolve);
+  });
+}
+
 function getSettings() {
   return new Promise((resolve) => {
     chrome.storage.local.get(SETTINGS_KEY, (res) => {
-      const stored = res[SETTINGS_KEY] || {};
-      resolve({
-        ...DEFAULT_SETTINGS,
-        ...stored,
-        fileTypes: Array.isArray(stored.fileTypes) && stored.fileTypes.length ? stored.fileTypes : DEFAULT_FILE_TYPES,
-        providers: Array.isArray(stored.providers) && stored.providers.length ? stored.providers : DEFAULT_PROVIDERS,
-      });
+      const settings = resolveSettings(res[SETTINGS_KEY]);
+      if (settings._migrationChanged) {
+        saveSettingsRecord(settings).then(() => {
+          const resolved = { ...settings };
+          delete resolved._migrationChanged;
+          resolve(resolved);
+        });
+        return;
+      }
+      delete settings._migrationChanged;
+      resolve(settings);
     });
   });
 }
+
+function runSettingsMigration() {
+  return getSettings();
+}
+
+function providerHostBase(hostContains) {
+  return String(hostContains || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/^\*:\/\//, "")
+    .replace(/^\*\./, "")
+    .replace(/^\./, "")
+    .replace(/\/.*$/, "")
+    .replace(/:\d+$/, "")
+    .replace(/[^a-z0-9.-]/g, "")
+    .replace(/^\.+|\.+$/g, "");
+}
+
+function providerMatchPatterns(provider) {
+  const host = providerHostBase(provider.hostContains);
+  if (!host || !host.includes(".") || host.endsWith(".")) return [];
+  return [
+    "http://" + host + "/*",
+    "https://" + host + "/*",
+    "http://*." + host + "/*",
+    "https://*." + host + "/*",
+  ];
+}
+
+function customProviderMatches(providers) {
+  const matches = [];
+  for (const provider of Array.isArray(providers) ? providers : []) {
+    const host = providerHostBase(provider.hostContains);
+    if (!provider.enabled || STATIC_PROVIDER_HOSTS.has(host)) continue;
+    matches.push(...providerMatchPatterns(provider));
+  }
+  return [...new Set(matches)];
+}
+
+function syncDynamicContentScripts(settings) {
+  if (!chrome.scripting?.registerContentScripts) return Promise.resolve({ ok: false, reason: "scripting unavailable" });
+  const matches = customProviderMatches(settings.providers);
+  return chrome.scripting.unregisterContentScripts({ ids: [DYNAMIC_CONTENT_SCRIPT_ID] })
+    .catch(() => null)
+    .then(() => {
+      if (!matches.length) return { ok: true, matches: [] };
+      return chrome.scripting.registerContentScripts([{
+        id: DYNAMIC_CONTENT_SCRIPT_ID,
+        matches,
+        js: ["file-types.js", "content.js"],
+        runAt: "document_idle",
+        persistAcrossSessions: true,
+      }]).then(() => ({ ok: true, matches }));
+    })
+    .catch((error) => ({ ok: false, error: error && error.message ? error.message : String(error) }));
+}
+
+chrome.runtime.onInstalled.addListener(() => {
+  runSettingsMigration().then(syncDynamicContentScripts);
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  runSettingsMigration().then(syncDynamicContentScripts);
+});
 
 // --- Download tracking ---
 
@@ -255,6 +511,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
         // Desktop notification for new URLs
         const query = msg.urls[0]?.query || "";
+        const provider = msg.urls[0]?.provider || "";
         if (query) {
           getSettings().then((settings) => {
             if (!settings.notifications) return;
@@ -266,11 +523,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
             });
             setTimeout(() => chrome.notifications.clear("dork-new"), 3000);
           });
-        }
-
-        // Update scan history
-        if (query) {
-          addHistoryEntry(query, result.added);
+          addHistoryEntry(query, result.added, { provider });
         }
       }
       sendResponse(result);
@@ -314,7 +567,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 
   if (msg.type === "CHECK_URL") {
-    checkUrl(msg.url).then(sendResponse);
+    getSettings().then((settings) => checkUrlWithCache(msg.url, settings.validateMode, settings).then(sendResponse));
     return true;
   }
 
@@ -385,9 +638,24 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 
   if (msg.type === "SAVE_SETTINGS") {
-    chrome.storage.local.set({ [SETTINGS_KEY]: msg.settings }, () => {
-      sendResponse({ ok: true });
+    const migration = migrateFileTypes(msg.settings?.fileTypes, msg.settings?.fileTypesVersion);
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      ...msg.settings,
+      fileTypes: normalizeFileTypeList(msg.settings?.fileTypes || migration.fileTypes),
+      fileTypesVersion: FILE_TYPES_VERSION,
+      providers: Array.isArray(msg.settings?.providers) && msg.settings.providers.length
+        ? msg.settings.providers
+        : DEFAULT_PROVIDERS,
+    };
+    chrome.storage.local.set({ [SETTINGS_KEY]: settings }, () => {
+      syncDynamicContentScripts(settings).then((result) => sendResponse({ ok: true, dynamicScripts: result }));
     });
+    return true;
+  }
+
+  if (msg.type === "SYNC_DYNAMIC_PROVIDERS") {
+    getSettings().then(syncDynamicContentScripts).then(sendResponse);
     return true;
   }
 
@@ -398,6 +666,23 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
   if (msg.type === "CLEAR_HISTORY") {
     saveHistory([]).then(() => sendResponse({ ok: true }));
+    return true;
+  }
+
+  if (msg.type === "GET_GLOBAL_STATS") {
+    getGlobalStats().then(sendResponse);
+    return true;
+  }
+
+  if (msg.type === "GET_VALIDATION_CACHE_STATS") {
+    getValidationCache().then((cache) => {
+      sendResponse({ entries: Object.keys(cache).length });
+    });
+    return true;
+  }
+
+  if (msg.type === "CLEAR_VALIDATION_CACHE") {
+    saveValidationCache({}).then(() => sendResponse({ ok: true }));
     return true;
   }
 
