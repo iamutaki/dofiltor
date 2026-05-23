@@ -1,4 +1,4 @@
-// popup.js — Dork File Collector v3.2.0 (dofiltor)
+// popup.js — Dork File Collector v3.5.0 (dofiltor)
 
 const STORAGE_KEY = "dofiltor_urls";
 const SETTINGS_KEY = "dofiltor_settings";
