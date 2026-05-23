@@ -4,5 +4,20 @@
   },
   "extensionDescription": {
     "message": "Collect file URLs from configurable dork/search result providers."
+  },
+  "notifCaptcha": {
+    "message": "CAPTCHA Detected"
+  },
+  "notifCaptchaMsg": {
+    "message": "Auto-next paused. Solve the CAPTCHA to continue."
+  },
+  "captchaResumeIn": {
+    "message": "Resuming in $seconds$s\u2026",
+    "placeholders": {
+      "seconds": { "content": "$1" }
+    }
+  },
+  "notifDone": {
+    "message": "Dork File Collector — Done"
   }
 }

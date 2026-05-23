@@ -4,5 +4,20 @@
   },
   "extensionDescription": {
     "message": "Temukan dan kumpulkan URL dokumen dari provider pencarian publik"
+  },
+  "notifCaptcha": {
+    "message": "CAPTCHA Terdeteksi"
+  },
+  "notifCaptchaMsg": {
+    "message": "Auto-next dijeda. Selesaikan CAPTCHA untuk melanjutkan."
+  },
+  "captchaResumeIn": {
+    "message": "Lanjut dalam $seconds$ dtk\u2026",
+    "placeholders": {
+      "seconds": { "content": "$1" }
+    }
+  },
+  "notifDone": {
+    "message": "Dork File Collector — Selesai"
   }
 }

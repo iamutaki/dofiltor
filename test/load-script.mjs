@@ -9,7 +9,7 @@ const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 export function loadExtensionScript(relativePath, extra = {}) {
   const file = path.join(root, relativePath);
   const src = fs.readFileSync(file, "utf8");
-  const ctx = { console, ...extra };
+  const ctx = { console, URL, ...extra };
   vm.createContext(ctx);
   vm.runInContext(src, ctx, { filename: relativePath });
   return ctx;

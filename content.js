@@ -13,6 +13,7 @@ const DEFAULT_PROVIDERS = [
 ];
 
 const SETTINGS_KEY = "dofiltor_settings";
+const URLS_STORAGE_KEY = "dofiltor_urls";
 
 let settings = {
   autoNext: false,
@@ -32,10 +33,13 @@ let autoNextActive = false;
 let nextTimer = null;
 let navigationWatchTimer = null;
 let scheduleAfterScanTimer = null;
-let justResolvedCaptcha = false;
+let captchaResumePending = false;
+let captchaCountdownTimeout = null;
+const CAPTCHA_RESUME_SECONDS = 8;
 let contextDead = false;
 let lastDoneSignalKey = "";
 let pendingAutoNextDelay = null;
+let extensionKnownUrls = null;
 
 function isDfcDebug() {
   try {
@@ -73,6 +77,7 @@ function sendMsg(msg, callback) {
 function shutdown() {
   contextDead = true;
   autoNextActive = false;
+  clearCaptchaResumeCountdown();
   clearTimeout(nextTimer);
   clearTimeout(navigationWatchTimer);
   clearTimeout(scheduleAfterScanTimer);
@@ -105,6 +110,9 @@ function loadSettings() {
 try {
   chrome.storage.onChanged.addListener((changes, area) => {
     if (contextDead) return;
+    if (area === "local" && changes[URLS_STORAGE_KEY]) {
+      extensionKnownUrls = urlsFromStorageItems(changes[URLS_STORAGE_KEY].newValue);
+    }
     if (area === "local" && changes[SETTINGS_KEY]) {
       const wasAutoNext = settings.autoNext;
       const wasEnabled = settings.enabled;
@@ -224,6 +232,19 @@ function findNextButton(selector) {
   return null;
 }
 
+function signalAutoNextStuck(page, message) {
+  autoNextActive = false;
+  clearTimeout(nextTimer);
+  clearTimeout(navigationWatchTimer);
+  sendMsg({
+    type: "AUTO_NEXT_STATUS",
+    status: "stuck",
+    page: page,
+    message: message || "Next page control not found — auto-next paused",
+  });
+  console.warn("[Dork File Collector]", message || "Auto-next paused (pagination not found)");
+}
+
 function signalAutoNextDone(page, message, status) {
   const dedupeKey = (status || "done") + "|" + page + "|" + message;
   if (lastDoneSignalKey === dedupeKey) return;
@@ -244,7 +265,7 @@ function signalAutoNextDone(page, message, status) {
 }
 
 function queueAutoNextAfterScan() {
-  if (contextDead || !settings.autoNext || !settings.enabled || captchaDetected) return;
+  if (contextDead || !settings.autoNext || !settings.enabled || captchaDetected || captchaResumePending) return;
   if (autoNextActive || nextTimer) return;
   clearTimeout(scheduleAfterScanTimer);
   const delay = pendingAutoNextDelay != null ? pendingAutoNextDelay : settings.pageDelay;
@@ -352,24 +373,175 @@ function getPageNumber() {
 
 // --- CAPTCHA detection ---
 
+function isProviderHostPage() {
+  const host = window.location.hostname.toLowerCase();
+  return (settings.providers || []).some((provider) => {
+    if (!provider?.enabled) return false;
+    const needle = String(provider.hostContains || "").toLowerCase();
+    return needle && host.includes(needle);
+  });
+}
+
 function detectCaptcha() {
+  const url = (location.href || "").toLowerCase();
+  const path = (location.pathname || "").toLowerCase();
+
+  if (path.includes("/sorry") || url.includes("/sorry?") || url.includes("google.com/sorry")) {
+    return true;
+  }
+
+  if (captchaTextHit(document.body?.innerText || "")) return true;
+
   const indicators = [
-    () => document.querySelector('iframe[src*="recaptcha"]'),
-    () => document.querySelector('#captcha-form'),
-    () => document.querySelector('#captcha'),
-    () => {
-      const body = document.body.innerText || "";
-      return body.includes("unusual traffic") || body.includes("automated requests");
-    },
+    () => document.querySelector('iframe[src*="recaptcha"], iframe[src*="hcaptcha"]'),
+    () => document.querySelector("#captcha-form, #captcha, .g-recaptcha, #recaptcha, .rc-anchor"),
     () => document.querySelector('form[action*="CaptchaRedirect"]'),
-    () => {
-      const body = document.body.innerText || "";
-      return body.includes("Our systems have detected") && body.includes("traffic");
-    },
+    () => document.querySelector('input[name="captcha"]'),
+    () => document.querySelector("#cf-turnstile-wrapper, .hcaptcha-box"),
+    () => document.querySelector("[data-callback*='captcha']"),
   ];
 
   for (const check of indicators) {
     try { if (check()) return true; } catch (e) { /* ignore */ }
+  }
+  return false;
+}
+
+function captchaCountdownLabel(secondsLeft) {
+  try {
+    return chrome.i18n.getMessage("captchaResumeIn", [String(secondsLeft)]) ||
+      "Resuming in " + secondsLeft + "s\u2026";
+  } catch (e) {
+    return "Resuming in " + secondsLeft + "s\u2026";
+  }
+}
+
+function injectCaptchaCountdownStyles() {
+  if (document.getElementById("dofiltor-captcha-countdown-style")) return;
+  const style = document.createElement("style");
+  style.id = "dofiltor-captcha-countdown-style";
+  style.textContent = [
+    "#dofiltor-captcha-countdown {",
+    "  position: fixed; right: 16px; bottom: 16px; z-index: 2147483646;",
+    "  max-width: min(320px, calc(100vw - 32px));",
+    "  padding: 10px 14px; border-radius: 8px;",
+    "  background: rgba(30, 136, 229, 0.95); color: #fff;",
+    "  font: 600 13px/1.35 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;",
+    "  box-shadow: 0 4px 16px rgba(0,0,0,0.22); pointer-events: none;",
+    "}",
+    "@media (prefers-color-scheme: dark) {",
+    "  #dofiltor-captcha-countdown { background: rgba(26, 115, 232, 0.96); }",
+    "}",
+  ].join("\n");
+  (document.head || document.documentElement).appendChild(style);
+}
+
+function showCaptchaCountdownOverlay(secondsLeft) {
+  injectCaptchaCountdownStyles();
+  let el = document.getElementById("dofiltor-captcha-countdown");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "dofiltor-captcha-countdown";
+    (document.body || document.documentElement).appendChild(el);
+  }
+  el.textContent = captchaCountdownLabel(secondsLeft);
+  el.style.display = "block";
+}
+
+function removeCaptchaCountdownOverlay() {
+  const el = document.getElementById("dofiltor-captcha-countdown");
+  if (el) el.remove();
+}
+
+function broadcastCaptchaCountdown(secondsLeft, done) {
+  sendMsg({
+    type: "CAPTCHA_COUNTDOWN",
+    secondsLeft: done ? 0 : secondsLeft,
+    done: !!done,
+  });
+}
+
+function clearCaptchaResumeCountdown() {
+  captchaResumePending = false;
+  clearTimeout(captchaCountdownTimeout);
+  captchaCountdownTimeout = null;
+  removeCaptchaCountdownOverlay();
+}
+
+function finishCaptchaResumeCountdown() {
+  clearCaptchaResumeCountdown();
+  broadcastCaptchaCountdown(0, true);
+  dlog("CAPTCHA resume countdown finished");
+  if (contextDead) return;
+  if (checkCaptchaState()) return;
+  scan();
+}
+
+function startCaptchaResumeCountdown(totalSec) {
+  clearCaptchaResumeCountdown();
+  captchaResumePending = true;
+  let left = Math.max(1, totalSec || CAPTCHA_RESUME_SECONDS);
+
+  const tick = () => {
+    if (contextDead) {
+      clearCaptchaResumeCountdown();
+      return;
+    }
+    if (left <= 0) {
+      finishCaptchaResumeCountdown();
+      return;
+    }
+    showCaptchaCountdownOverlay(left);
+    broadcastCaptchaCountdown(left, false);
+    left -= 1;
+    captchaCountdownTimeout = setTimeout(tick, 1000);
+  };
+  tick();
+}
+
+function reportCaptchaDetected() {
+  if (captchaDetected) return;
+  clearCaptchaResumeCountdown();
+  captchaDetected = true;
+  clearTimeout(nextTimer);
+  clearTimeout(scheduleAfterScanTimer);
+  clearTimeout(navigationWatchTimer);
+  autoNextActive = false;
+  sendMsg({
+    type: "CAPTCHA_STATUS",
+    status: "detected",
+    url: window.location.href,
+  });
+  console.warn("[Dork File Collector] CAPTCHA detected — auto-next paused. Solve it manually.");
+}
+
+function reportCaptchaResolved() {
+  if (!captchaDetected) return;
+  captchaDetected = false;
+  clearTimeout(nextTimer);
+  clearTimeout(scheduleAfterScanTimer);
+  clearTimeout(navigationWatchTimer);
+  autoNextActive = false;
+  sendMsg({
+    type: "CAPTCHA_STATUS",
+    status: "resolved",
+    url: window.location.href,
+  });
+  logActivity("captcha", "CAPTCHA solved — resume in " + CAPTCHA_RESUME_SECONDS + "s");
+  dlog("CAPTCHA resolved — resume countdown started");
+  startCaptchaResumeCountdown(CAPTCHA_RESUME_SECONDS);
+}
+
+function checkCaptchaState() {
+  if (contextDead || !settings.enabled) return false;
+  if (!isProviderHostPage()) return false;
+
+  if (detectCaptcha()) {
+    reportCaptchaDetected();
+    return true;
+  }
+  if (captchaDetected) {
+    reportCaptchaResolved();
   }
   return false;
 }
@@ -451,27 +623,99 @@ function isResultAreaLink(link) {
   return !!resolveLinkFromAnchor(link);
 }
 
-function visitedStorageKey() {
+function dorkScopeKey() {
   const query = typeof normalizeDorkQuery === "function"
     ? normalizeDorkQuery(getQueryFromUrl())
     : getQueryFromUrl().trim().toLowerCase();
-  return "dofiltor_seen_" + (query || location.hostname);
+  return query || location.hostname;
+}
+
+function visitedStorageKey() {
+  return "dofiltor_seen_" + dorkScopeKey();
+}
+
+function collectedStorageKey() {
+  return "dofiltor_collected_" + dorkScopeKey();
+}
+
+let seenUrlsCache = null;
+let collectedUrlsCache = null;
+let seenCacheScope = "";
+let collectedCacheScope = "";
+
+function resetVisitedCaches() {
+  seenUrlsCache = null;
+  collectedUrlsCache = null;
+  seenCacheScope = "";
+  collectedCacheScope = "";
 }
 
 function loadSeenResultUrls() {
+  const scope = visitedStorageKey();
+  if (seenUrlsCache && seenCacheScope === scope) return seenUrlsCache;
   try {
-    const raw = sessionStorage.getItem(visitedStorageKey());
-    return new Set(Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : []);
+    const raw = sessionStorage.getItem(scope);
+    seenUrlsCache = new Set(Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : []);
   } catch (e) {
-    return new Set();
+    seenUrlsCache = new Set();
   }
+  seenCacheScope = scope;
+  return seenUrlsCache;
 }
 
 function saveSeenResultUrls(seen) {
   try {
     const list = [...seen];
     sessionStorage.setItem(visitedStorageKey(), JSON.stringify(list.slice(-3000)));
+    seenUrlsCache = new Set(list);
+    seenCacheScope = visitedStorageKey();
   } catch (e) { /* ignore quota */ }
+}
+
+function loadCollectedUrls() {
+  const scope = collectedStorageKey();
+  if (collectedUrlsCache && collectedCacheScope === scope) return collectedUrlsCache;
+  try {
+    const raw = sessionStorage.getItem(scope);
+    collectedUrlsCache = new Set(Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : []);
+  } catch (e) {
+    collectedUrlsCache = new Set();
+  }
+  collectedCacheScope = scope;
+  return collectedUrlsCache;
+}
+
+function saveCollectedUrls(collected) {
+  try {
+    const list = [...collected];
+    sessionStorage.setItem(collectedStorageKey(), JSON.stringify(list.slice(-3000)));
+    collectedUrlsCache = new Set(list);
+    collectedCacheScope = collectedStorageKey();
+  } catch (e) { /* ignore quota */ }
+}
+
+function noteCollectedUrls(urls) {
+  if (!Array.isArray(urls) || !urls.length) return;
+  const collected = loadCollectedUrls();
+  let added = 0;
+  for (const url of urls) {
+    if (!url || collected.has(url)) continue;
+    collected.add(url);
+    added++;
+  }
+  if (added > 0) saveCollectedUrls(collected);
+}
+
+function markLinksVisited(urls) {
+  const urlSet = new Set(urls);
+  if (!urlSet.size) return;
+  injectVisitedStyles();
+  const root = getResultRoot();
+  if (!root) return;
+  for (const link of root.querySelectorAll("a[href]")) {
+    const url = resolveLinkFromAnchor(link);
+    if (url && urlSet.has(url)) markVisitedOnLink(link);
+  }
 }
 
 function injectVisitedStyles() {
@@ -504,9 +748,9 @@ function markVisitedOnLink(link) {
 }
 
 function applyVisitedResultMarks(addCurrentPage) {
-  if (!settings.enabled || !getActiveProvider()) return;
+  if (!settings.enabled || !getActiveProvider()) return { ok: false, added: 0, total: 0 };
   const root = getResultRoot();
-  if (!root) return;
+  if (!root) return { ok: false, added: 0, total: 0 };
 
   injectVisitedStyles();
   const seen = loadSeenResultUrls();
@@ -525,23 +769,62 @@ function applyVisitedResultMarks(addCurrentPage) {
 
   if (addCurrentPage && added > 0) saveSeenResultUrls(seen);
   dlog("Visited marks:", seen.size, "urls", addCurrentPage ? "(+" + added + " this page)" : "");
+  return { ok: true, added, total: seen.size };
+}
+
+let lastSkipLogKey = "";
+let lastSkipLogAt = 0;
+
+function noteSkipVisitedLog(count, pageNum) {
+  const key = String(pageNum) + ":" + String(count);
+  const now = Date.now();
+  if (key === lastSkipLogKey && now - lastSkipLogAt < 5000) return;
+  lastSkipLogKey = key;
+  lastSkipLogAt = now;
+  logActivity("skip", "Skipped " + count + " visited on page " + pageNum);
+}
+
+function logActivity(type, message) {
+  sendMsg({
+    type: "LOG_ACTIVITY",
+    activityType: type,
+    message: String(message || ""),
+    page: getPageNumber(),
+  });
 }
 
 function noteClickedResultLink(link) {
   const url = resolveLinkFromAnchor(link);
   if (!url) return;
+  noteCollectedUrls([url]);
   const seen = loadSeenResultUrls();
   seen.add(url);
   saveSeenResultUrls(seen);
   markVisitedOnLink(link);
 }
 
-function shouldSkipVisitedResultUrl(url) {
-  if (!url || settings.skipVisitedResults === false) return false;
-  return loadSeenResultUrls().has(url);
+function refreshExtensionKnownUrls(done) {
+  if (!chrome.storage?.local) {
+    extensionKnownUrls = new Set();
+    if (done) done();
+    return;
+  }
+  chrome.storage.local.get(URLS_STORAGE_KEY, (res) => {
+    extensionKnownUrls = urlsFromStorageItems(res[URLS_STORAGE_KEY]);
+    if (done) done();
+  });
 }
 
-function extractUrls() {
+function shouldSkipVisitedResultUrl(url) {
+  return shouldSkipVisitedUrl(url, {
+    skipEnabled: settings.skipVisitedResults !== false,
+    collected: loadCollectedUrls(),
+    extensionKnown: extensionKnownUrls,
+  });
+}
+
+function extractUrls(options) {
+  const ignoreVisited = !!(options && options.ignoreVisited);
   const provider = getActiveProvider();
   if (!provider) return [];
   const query = getQueryFromUrl();
@@ -556,7 +839,7 @@ function extractUrls() {
   for (const link of links) {
     const actualUrl = resolveLinkFromAnchor(link);
     if (!actualUrl || seen.has(actualUrl)) continue;
-    if (shouldSkipVisitedResultUrl(actualUrl)) {
+    if (!ignoreVisited && shouldSkipVisitedResultUrl(actualUrl)) {
       skippedVisited++;
       continue;
     }
@@ -575,39 +858,82 @@ function extractUrls() {
     }
   }
 
-  if (skippedVisited > 0) {
+  if (!ignoreVisited && skippedVisited > 0) {
     dlog("Skipped", skippedVisited, "visited result URL(s)");
+    noteSkipVisitedLog(skippedVisited, pageNum);
   }
 
   return urls;
 }
 
+function manualGrabPage() {
+  if (contextDead) return { ok: false, found: 0, added: 0, error: "dead" };
+  if (!settings.enabled) return { ok: false, found: 0, added: 0, error: "disabled" };
+  if (checkCaptchaState()) return { ok: false, found: 0, added: 0, error: "captcha" };
+  const provider = getActiveProvider();
+  if (!provider) return { ok: false, found: 0, added: 0, error: "no_provider" };
+
+  const pageNum = getPageNumber();
+  const urls = extractUrls({ ignoreVisited: true });
+  const found = urls.length;
+
+  if (found === 0) {
+    return new Promise((resolve) => {
+      sendMsg({ type: "ADD_URLS", urls: [], manual: true, found: 0 }, (response) => {
+        resolve({ ok: true, found: 0, added: 0, page: pageNum, ...(response || {}) });
+      });
+    });
+  }
+
+  const collectedNow = urls.map((item) => item.url);
+  noteCollectedUrls(collectedNow);
+
+  return new Promise((resolve) => {
+    sendMsg({ type: "ADD_URLS", urls, manual: true, found }, (response) => {
+      if (!response) {
+        resolve({ ok: false, found, added: 0, error: "no_response", page: pageNum });
+        return;
+      }
+      const added = response.added || 0;
+      if (added > 0) {
+        sendMsg({ type: "UPDATE_BADGE", count: response.total });
+        if (settings.autoValidate && response.new_urls) {
+          for (const url of response.new_urls) {
+            sendMsg({ type: "AUTO_CHECK_URL", url });
+          }
+        }
+        extensionKnownUrls = null;
+        refreshExtensionKnownUrls();
+      }
+      resolve({ ok: true, found, added, page: pageNum });
+    });
+  });
+}
+
+let scanRunning = false;
+let scanQueued = false;
+
 function scan() {
   if (contextDead) return;
   if (!settings.enabled) return;
-  if (!getActiveProvider()) return;
+  if (scanRunning) {
+    scanQueued = true;
+    return;
+  }
+  scanRunning = true;
 
-  if (detectCaptcha()) {
-    if (!captchaDetected) {
-      captchaDetected = true;
-      clearTimeout(nextTimer);
-      autoNextActive = false;
-      sendMsg({
-        type: "CAPTCHA_STATUS",
-        status: "detected",
-        url: window.location.href,
-      });
-      console.warn("[Dork File Collector] CAPTCHA detected — auto-next paused. Solve it manually.");
-    }
+  if (checkCaptchaState()) {
+    scanRunning = false;
+    if (scanQueued) { scanQueued = false; scan(); }
+    return;
+  }
+  if (!getActiveProvider()) {
+    scanRunning = false;
+    if (scanQueued) { scanQueued = false; scan(); }
     return;
   }
 
-  if (captchaDetected) {
-    captchaDetected = false;
-    justResolvedCaptcha = true;
-    sendMsg({ type: "CAPTCHA_STATUS", status: "resolved" });
-    dlog("CAPTCHA resolved — resuming with longer delay");
-  }
+  if (!extensionKnownUrls) refreshExtensionKnownUrls();
 
   const newUrls = extractUrls();
 
@@ -617,16 +943,22 @@ function scan() {
       signalAutoNextDone(getPageNumber(), "End of results — no more pages", "end");
       dlog("End of results reached at page " + getPageNumber());
     }
+    scanRunning = false;
+    if (scanQueued) { scanQueued = false; scan(); }
     return;
   }
 
   if (newUrls.length === 0) {
-    applyVisitedResultMarks(true);
+    applyVisitedResultMarks(false);
     queueAutoNextAfterScan();
+    scanRunning = false;
+    if (scanQueued) { scanQueued = false; scan(); }
     return;
   }
 
-  applyVisitedResultMarks(true);
+  const collectedNow = newUrls.map((item) => item.url);
+  noteCollectedUrls(collectedNow);
+  markLinksVisited(collectedNow);
 
   sendMsg({ type: "ADD_URLS", urls: newUrls }, (response) => {
     if (!response) return;
@@ -640,12 +972,14 @@ function scan() {
     }
   });
   queueAutoNextAfterScan();
+  scanRunning = false;
+  if (scanQueued) { scanQueued = false; scan(); }
 }
 
 // --- Auto next page ---
 
 function scheduleAutoNext(delay, waitAttempt) {
-  if (contextDead || !settings.autoNext || captchaDetected) return;
+  if (contextDead || !settings.autoNext || captchaDetected || captchaResumePending) return;
   if (!settings.enabled) return;
 
   const attempt = waitAttempt || 0;
@@ -666,9 +1000,9 @@ function scheduleAutoNext(delay, waitAttempt) {
     }
     if (hasExplicitEndOfResults() || !hasSearchResultsOnPage()) {
       signalAutoNextDone(page, "Last page reached");
-      return;
+    } else {
+      signalAutoNextStuck(page, "Next page control not found — auto-next paused");
     }
-    signalAutoNextDone(page, "Last page reached");
     return;
   }
 
@@ -708,14 +1042,21 @@ document.addEventListener("click", (event) => {
 }, true);
 
 loadSettings().then(() => {
+  refreshExtensionKnownUrls();
   setTimeout(() => {
     if (contextDead) return;
-    if (!getActiveProvider()) return;
+    if (!extensionKnownUrls) refreshExtensionKnownUrls();
+    checkCaptchaState();
+    if (!getActiveProvider() && !captchaDetected) return;
     injectVisitedStyles();
     applyVisitedResultMarks(false);
     warnIfDorkAlreadyCaptured();
     scan();
   }, 1000);
+
+  setInterval(() => {
+    if (!contextDead && settings.enabled) checkCaptchaState();
+  }, 2500);
 });
 
 // Listen for URL changes; many result pages use pushState/replaceState.
@@ -725,15 +1066,16 @@ const urlObserver = new MutationObserver(() => {
   if (contextDead) return;
   if (location.href !== lastUrl) {
     lastUrl = location.href;
+    lastDoneSignalKey = "";
+    resetVisitedCaches();
     clearTimeout(nextTimer);
 
     setTimeout(() => {
       if (contextDead) return;
+      if (checkCaptchaState()) return;
       warnIfDorkAlreadyCaptured();
       applyVisitedResultMarks(false);
-      pendingAutoNextDelay = justResolvedCaptcha ? 8000 : settings.pageDelay;
-      justResolvedCaptcha = false;
-      scan();
+      if (!captchaResumePending) scan();
     }, 1500);
   }
 });
@@ -743,7 +1085,9 @@ const domObserver = new MutationObserver(() => {
   if (contextDead) return;
   clearTimeout(domObserver._timer);
   domObserver._timer = setTimeout(() => {
-    if (!contextDead) scan();
+    if (contextDead) return;
+    if (checkCaptchaState()) return;
+    scan();
   }, 800);
 });
 
@@ -770,6 +1114,20 @@ try {
       autoNextActive = false;
       sendResponse({ ok: true });
       return false;
+    }
+
+    if (msg.type === "MARK_PAGE_COMPLETE") {
+      const result = applyVisitedResultMarks(true);
+      if (result.ok) {
+        logActivity("mark", "Page marked complete (+" + result.added + " links)");
+      }
+      sendResponse(result);
+      return false;
+    }
+
+    if (msg.type === "MANUAL_GRAB") {
+      manualGrabPage().then(sendResponse);
+      return true;
     }
   });
 } catch (e) {

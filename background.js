@@ -6,8 +6,64 @@ const HISTORY_KEY = "dofiltor_history";
 const GLOBAL_STATS_KEY = "dofiltor_global_stats";
 const VALIDATION_CACHE_KEY = "dofiltor_validation_cache";
 const AUTO_NEXT_ALERT_KEY = "dofiltor_auto_next_alert";
+const CAPTCHA_ALERT_KEY = "dofiltor_captcha_alert";
+const NOTIF_HINT_KEY = "dofiltor_notif_hint";
+const ACTIVITY_LOG_KEY = "dofiltor_activity_log";
+const SESSION_STATS_KEY = "dofiltor_session_stats";
+const BULK_DORK_KEY = "dofiltor_bulk_dork";
+const CAPTCHA_COUNTDOWN_KEY = "dofiltor_captcha_countdown";
+
+function showExtensionNotification(id, options, settings) {
+  if (!settings || !settings.notifications) return;
+  const iconUrl = chrome.runtime.getURL("icons/icon128.png");
+  const payload = { type: "basic", iconUrl, priority: 1, ...options };
+
+  const setBlockedHint = (blocked) => {
+    if (blocked) {
+      chrome.storage.local.set({ [NOTIF_HINT_KEY]: { blocked: true, time: Date.now() } });
+    } else {
+      chrome.storage.local.remove(NOTIF_HINT_KEY);
+    }
+  };
+
+  const create = () => {
+    chrome.notifications.create(id, payload, () => {
+      setBlockedHint(!!chrome.runtime.lastError);
+    });
+  };
+
+  if (chrome.notifications.getPermissionLevel) {
+    chrome.notifications.getPermissionLevel((level) => {
+      if (level === "denied") {
+        setBlockedHint(true);
+        return;
+      }
+      create();
+    });
+    return;
+  }
+  create();
+}
+
+/**
+ * Push UI updates to side panel. Chrome rejects the sendMessage promise when
+ * no listener is open — try/catch alone on a sync call does not catch that.
+ */
+function broadcastRuntimeMessage(payload) {
+  void sendRuntimeMessageSafe(payload);
+}
+
+async function sendRuntimeMessageSafe(payload) {
+  try {
+    await chrome.runtime.sendMessage(payload);
+  } catch (e) {
+    // Expected: "Could not establish connection. Receiving end does not exist."
+    // when the side panel is closed.
+  }
+}
+
 const CSV_COLUMNS = ["url", "file_type", "query", "source_page", "discovered_at", "size"];
-importScripts("file-types.js", "dork-utils.js");
+importScripts("file-types.js", "dork-utils.js", "provider-utils.js", "activity-log.js");
 const DEFAULT_PROVIDERS = [
   { id: "google", name: "Google", enabled: true, hostContains: "google.", pathContains: "/search", queryParam: "q", nextSelector: "#pnnext, a#pnnext, a[aria-label=\"Next page\"], a[aria-label=\"Halaman berikutnya\"]" },
   { id: "bing", name: "Bing", enabled: true, hostContains: "bing.com", pathContains: "/search", queryParam: "q", nextSelector: "a.sb_pagN" },
@@ -43,6 +99,167 @@ let autoNextStatus = { status: "idle", page: 0, message: "" };
 let batchStatus = { active: false, total: 0, done: 0, message: "" };
 let autoValidateQueue = [];
 let autoValidateBusy = false;
+
+function pushActivity(type, message, page) {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(ACTIVITY_LOG_KEY, (res) => {
+      const next = appendActivityEntry(res[ACTIVITY_LOG_KEY], { type, message, page });
+      chrome.storage.local.set({ [ACTIVITY_LOG_KEY]: next }, () => {
+        broadcastRuntimeMessage({ type: "ACTIVITY_LOG_UPDATED", log: next });
+        resolve(next);
+      });
+    });
+  });
+}
+
+function getBulkState() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(BULK_DORK_KEY, (res) => resolve(res[BULK_DORK_KEY] || null));
+  });
+}
+
+function setBulkState(state) {
+  return new Promise((resolve) => {
+    if (!state) {
+      chrome.storage.local.remove(BULK_DORK_KEY, resolve);
+      return;
+    }
+    chrome.storage.local.set({ [BULK_DORK_KEY]: state }, resolve);
+  });
+}
+
+function bumpSessionDomains(urlList) {
+  const urls = (urlList || []).map((item) => (typeof item === "string" ? item : item && item.url)).filter(Boolean);
+  if (!urls.length) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    chrome.storage.local.get(SESSION_STATS_KEY, (res) => {
+      const prev = res[SESSION_STATS_KEY] || { domains: {}, startedAt: new Date().toISOString() };
+      const domains = mergeSessionDomainCounts(prev.domains, urls);
+      const payload = { ...prev, domains, updatedAt: new Date().toISOString() };
+      chrome.storage.local.set({ [SESSION_STATS_KEY]: payload }, () => {
+        broadcastRuntimeMessage({ type: "SESSION_STATS_UPDATED", stats: payload });
+        resolve(payload);
+      });
+    });
+  });
+}
+
+function clearSessionDomainStats() {
+  return new Promise((resolve) => {
+    chrome.storage.local.remove(SESSION_STATS_KEY, () => {
+      broadcastRuntimeMessage({ type: "SESSION_STATS_UPDATED", stats: { domains: {} } });
+      resolve();
+    });
+  });
+}
+
+function stopBulkDork(completed, message) {
+  return getBulkState().then((bulk) => {
+    if (!bulk) return null;
+    return setBulkState(null).then(() => {
+      pushActivity(completed ? "bulk" : "info", message || (completed ? "Bulk dork queue finished" : "Bulk dork stopped"));
+      broadcastRuntimeMessage({ type: "BULK_DORK_STATUS", active: false, completed: !!completed, message: message || "" });
+      return null;
+    });
+  });
+}
+
+function broadcastBulkStatus(bulk, extra) {
+  const payload = {
+    type: "BULK_DORK_STATUS",
+    active: !!(bulk && bulk.active),
+    index: bulk ? bulk.index : 0,
+    total: bulk ? bulk.queries.length : 0,
+    currentQuery: bulk ? bulk.currentQuery : "",
+    providerId: bulk ? bulk.providerId : "",
+    ...(extra || {}),
+  };
+  broadcastRuntimeMessage(payload);
+  return payload;
+}
+
+function advanceBulkDorkAfterPage() {
+  return getBulkState().then((bulk) => {
+    if (!bulk || !bulk.active) return null;
+    const nextIndex = bulk.index + 1;
+    if (nextIndex >= bulk.queries.length) {
+      return stopBulkDork(true, "Bulk dork queue finished (" + bulk.queries.length + ")");
+    }
+    return getSettings().then((settings) => {
+      const provider = (settings.providers || []).find((p) => p.id === bulk.providerId) ||
+        (settings.providers || []).find((p) => p.enabled);
+      const nextQuery = bulk.queries[nextIndex];
+      const url = buildProviderSearchUrl(provider, nextQuery);
+      if (!url) {
+        return stopBulkDork(false, "Could not build search URL for provider");
+      }
+      const nextBulk = {
+        ...bulk,
+        index: nextIndex,
+        currentQuery: nextQuery,
+        status: "running",
+      };
+      return setBulkState(nextBulk).then(() => {
+        pushActivity("bulk", "Dork " + (nextIndex + 1) + "/" + bulk.queries.length + ": " + nextQuery.substring(0, 72));
+        broadcastBulkStatus(nextBulk, { message: "Navigating to next dork" });
+        return chrome.tabs.update(bulk.tabId, { url }).then(() => nextBulk);
+      });
+    });
+  });
+}
+
+function handleBulkOnAutoNextComplete(msg) {
+  return getBulkState().then((bulk) => {
+    if (!bulk || !bulk.active) return false;
+    if (msg.status !== "done" && msg.status !== "end") return false;
+    return advanceBulkDorkAfterPage().then(() => true);
+  });
+}
+
+function startBulkDorkQueue(tabId, text, providerId) {
+  const queries = parseBulkDorkLines(text);
+  if (!queries.length) {
+    return Promise.resolve({ ok: false, error: "no_queries" });
+  }
+  if (tabId == null) {
+    return Promise.resolve({ ok: false, error: "no_tab" });
+  }
+
+  return getSettings().then((settings) => {
+    return chrome.tabs.get(tabId).then((tab) => {
+      let provider = (settings.providers || []).find((p) => p.id === providerId && p.enabled);
+      if (!provider) {
+        provider = findEnabledProviderForUrl(settings.providers, tab.url);
+      }
+      if (!provider) {
+        return { ok: false, error: "no_provider" };
+      }
+
+      const firstUrl = buildProviderSearchUrl(provider, queries[0]);
+      if (!firstUrl) {
+        return { ok: false, error: "bad_url" };
+      }
+
+      const bulk = {
+        active: true,
+        tabId,
+        providerId: provider.id,
+        queries,
+        index: 0,
+        currentQuery: queries[0],
+        status: "running",
+        startedAt: Date.now(),
+      };
+
+      const nextSettings = { ...settings, autoNext: true };
+      return saveSettingsRecord(nextSettings).then(() => setBulkState(bulk)).then(() => {
+        pushActivity("bulk", "Bulk queue started (" + queries.length + " dorks, " + provider.name + ")");
+        broadcastBulkStatus(bulk, { message: "Bulk queue started" });
+        return chrome.tabs.update(tabId, { url: firstUrl }).then(() => ({ ok: true, bulk }));
+      });
+    }).catch(() => ({ ok: false, error: "tab_error" }));
+  });
+}
 
 function getUrls() {
   return new Promise((resolve) => {
@@ -486,6 +703,7 @@ function customProviderMatches(providers) {
   for (const provider of Array.isArray(providers) ? providers : []) {
     const host = providerHostBase(provider.hostContains);
     if (!provider.enabled || STATIC_PROVIDER_HOSTS.has(host)) continue;
+    // Full host wildcard — includes /search, /sorry, and other challenge paths on custom domains.
     matches.push(...providerMatchPatterns(provider));
   }
   return [...new Set(matches)];
@@ -501,7 +719,7 @@ function syncDynamicContentScripts(settings) {
       return chrome.scripting.registerContentScripts([{
         id: DYNAMIC_CONTENT_SCRIPT_ID,
         matches,
-        js: ["file-types.js", "content.js"],
+        js: ["file-types.js", "dork-utils.js", "visited-logic.js", "content.js"],
         runAt: "document_idle",
         persistAcrossSessions: true,
       }]).then(() => ({ ok: true, matches }));
@@ -550,19 +768,31 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     getSettings().then((stg) => {
       if (!stg.enabled) { sendResponse({ added: 0, total: 0, new_urls: [] }); return; }
       addUrls(msg.urls).then((result) => {
+      const page = msg.urls[0]?.source_page || "?";
+      if (msg.manual) {
+        const found = Number(msg.found);
+        const totalFound = Number.isFinite(found) ? found : (Array.isArray(msg.urls) ? msg.urls.length : 0);
+        const added = result.added || 0;
+        const already = Math.max(0, totalFound - added);
+        let activityMsg = "Manual grab: " + added + " new";
+        if (already > 0) activityMsg += ", " + already + " already listed";
+        activityMsg += " (page " + page + ")";
+        if (totalFound === 0) activityMsg = "Manual grab: 0 file URLs (page " + page + ")";
+        pushActivity("grab", activityMsg);
+      } else if (result.added > 0) {
+        pushActivity("scan", result.added + " new URL(s) on page " + page);
+      }
       if (result.added > 0) {
+        bumpSessionDomains(msg.urls);
         // Desktop notification for new URLs
         const query = msg.urls[0]?.query || "";
         const provider = msg.urls[0]?.provider || "";
         if (query) {
           getSettings().then((settings) => {
-            if (!settings.notifications) return;
-            chrome.notifications.create("dork-new", {
-              type: "basic", iconUrl: "icons/icon128.png",
+            showExtensionNotification("dork-new", {
               title: "Dork File Collector",
               message: result.added + " new URLs found" + (query ? " for \"" + query.substring(0, 40) + "...\"" : ""),
-              priority: 1,
-            });
+            }, settings);
             setTimeout(() => chrome.notifications.clear("dork-new"), 3000);
           });
           addHistoryEntry(query, result.added, { provider });
@@ -659,7 +889,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === "CLEAR_ALL") {
     autoValidateQueue = [];
     autoValidateBusy = false;
-    saveUrls([]).then(() => sendResponse({ ok: true, count: 0 }));
+    clearSessionDomainStats()
+      .then(() => saveUrls([]))
+      .then(() => sendResponse({ ok: true, count: 0 }));
     return true;
   }
 
@@ -754,23 +986,59 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
   // --- CAPTCHA ---
   if (msg.type === "CAPTCHA_STATUS") {
-    captchaStatus = { active: msg.status === "detected", url: msg.url || null, time: Date.now() };
+    captchaStatus = {
+      active: msg.status === "detected",
+      url: msg.url || null,
+      time: Date.now(),
+    };
     chrome.action.setBadgeBackgroundColor({ color: captchaStatus.active ? "#d93025" : "#2563eb" });
     if (captchaStatus.active) {
+      chrome.storage.local.set({ [CAPTCHA_ALERT_KEY]: captchaStatus });
+      pushActivity("captcha", "CAPTCHA detected — auto-next paused");
+      broadcastRuntimeMessage({ type: "CAPTCHA_DETECTED", ...captchaStatus });
       getSettings().then((settings) => {
-        if (!settings.notifications) return;
-        chrome.notifications.create("dork-captcha", {
-          type: "basic", iconUrl: "icons/icon128.png",
-          title: "CAPTCHA Detected",
-          message: "Auto-next paused. Solve the CAPTCHA to continue.",
+        showExtensionNotification("dork-captcha", {
+          title: chrome.i18n.getMessage("notifCaptcha") || "CAPTCHA Detected",
+          message: chrome.i18n.getMessage("notifCaptchaMsg") || "Auto-next paused. Solve the CAPTCHA to continue.",
           priority: 2,
-        });
+          requireInteraction: true,
+        }, settings);
       });
     } else {
+      chrome.storage.local.remove(CAPTCHA_ALERT_KEY);
       chrome.notifications.clear("dork-captcha");
+      pushActivity("captcha", "CAPTCHA cleared — resume countdown");
+      broadcastRuntimeMessage({ type: "CAPTCHA_RESOLVED" });
     }
     sendResponse({ ok: true });
     return false;
+  }
+
+  if (msg.type === "CAPTCHA_COUNTDOWN") {
+    if (msg.done) {
+      chrome.storage.local.remove(CAPTCHA_COUNTDOWN_KEY);
+    } else {
+      chrome.storage.local.set({
+        [CAPTCHA_COUNTDOWN_KEY]: {
+          secondsLeft: msg.secondsLeft || 0,
+          time: Date.now(),
+        },
+      });
+    }
+    broadcastRuntimeMessage({
+      type: "CAPTCHA_COUNTDOWN",
+      secondsLeft: msg.secondsLeft || 0,
+      done: !!msg.done,
+    });
+    sendResponse({ ok: true });
+    return false;
+  }
+
+  if (msg.type === "GET_CAPTCHA_COUNTDOWN") {
+    chrome.storage.local.get(CAPTCHA_COUNTDOWN_KEY, (res) => {
+      sendResponse(res[CAPTCHA_COUNTDOWN_KEY] || null);
+    });
+    return true;
   }
 
   if (msg.type === "GET_CAPTCHA_STATUS") {
@@ -789,27 +1057,43 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         message: msg.message || "Auto-next stopped",
         time: Date.now(),
       };
-      chrome.storage.local.set({ [AUTO_NEXT_ALERT_KEY]: alertPayload });
-      try {
-        chrome.runtime.sendMessage({ type: "AUTO_NEXT_DONE", ...alertPayload });
-      } catch (e) { /* no panel listener */ }
 
-      Promise.all([getUrls(), getSettings()]).then(([urls, settings]) => {
-        if (!settings.notifications) return;
-        const iconUrl = chrome.runtime.getURL("icons/icon128.png");
-        chrome.notifications.create("dork-done", {
-          type: "basic",
-          iconUrl,
-          title: "Dork File Collector \u2014 Done",
-          message: alertPayload.message + ". " + urls.length + " URLs total.",
-          priority: 2,
-        }, () => {
-          if (chrome.runtime.lastError) {
-            console.warn("[Dofiltor] notification:", chrome.runtime.lastError.message);
-          }
+      getBulkState().then((bulk) => {
+        const bulkHasMore = bulk && bulk.active && bulk.index + 1 < bulk.queries.length;
+
+        if (bulkHasMore) {
+          pushActivity("bulk", "Dork " + (bulk.index + 1) + "/" + bulk.queries.length + " finished");
+          handleBulkOnAutoNextComplete(msg);
+          return;
+        }
+
+        chrome.storage.local.set({ [AUTO_NEXT_ALERT_KEY]: alertPayload });
+        broadcastRuntimeMessage({ type: "AUTO_NEXT_DONE", ...alertPayload });
+
+        pushActivity(msg.status === "end" ? "end" : "done", alertPayload.message, alertPayload.page);
+
+        Promise.all([getUrls(), getSettings()]).then(([urls, settings]) => {
+          showExtensionNotification("dork-done", {
+            title: chrome.i18n.getMessage("notifDone") || "Dork File Collector \u2014 Done",
+            message: alertPayload.message + ". " + urls.length + " URLs total.",
+            priority: 2,
+          }, settings);
+          setTimeout(() => chrome.notifications.clear("dork-done"), 8000);
         });
-        setTimeout(() => chrome.notifications.clear("dork-done"), 8000);
+
+        if (bulk && bulk.active) {
+          handleBulkOnAutoNextComplete(msg);
+        }
       });
+    } else if (msg.status === "stuck") {
+      pushActivity("stuck", msg.message || "Auto-next stuck", msg.page || 0);
+      getBulkState().then((bulk) => {
+        if (bulk && bulk.active) {
+          stopBulkDork(false, "Bulk stopped: " + (msg.message || "auto-next stuck"));
+        }
+      });
+    } else if (msg.status === "navigating") {
+      pushActivity("nav", "Next page " + (msg.next || "?"), msg.page || 0);
     }
 
     sendResponse({ ok: true });
@@ -820,4 +1104,61 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     sendResponse(autoNextStatus);
     return false;
   }
+
+  if (msg.type === "GET_NOTIF_HINT") {
+    chrome.storage.local.get(NOTIF_HINT_KEY, (res) => {
+      sendResponse(res[NOTIF_HINT_KEY] || null);
+    });
+    return true;
+  }
+
+  if (msg.type === "LOG_ACTIVITY") {
+    pushActivity(msg.activityType || msg.type || "info", msg.message || "", msg.page)
+      .then((log) => sendResponse({ ok: true, log }))
+      .catch(() => sendResponse({ ok: false }));
+    return true;
+  }
+
+  if (msg.type === "GET_ACTIVITY_LOG") {
+    chrome.storage.local.get(ACTIVITY_LOG_KEY, (res) => {
+      sendResponse(res[ACTIVITY_LOG_KEY] || []);
+    });
+    return true;
+  }
+
+  if (msg.type === "CLEAR_ACTIVITY_LOG") {
+    chrome.storage.local.remove(ACTIVITY_LOG_KEY, () => {
+      broadcastRuntimeMessage({ type: "ACTIVITY_LOG_UPDATED", log: [] });
+      sendResponse({ ok: true });
+    });
+    return true;
+  }
+
+  if (msg.type === "GET_SESSION_STATS") {
+    chrome.storage.local.get(SESSION_STATS_KEY, (res) => {
+      sendResponse(res[SESSION_STATS_KEY] || { domains: {} });
+    });
+    return true;
+  }
+
+  if (msg.type === "CLEAR_SESSION_STATS") {
+    chrome.storage.local.remove(SESSION_STATS_KEY, () => sendResponse({ ok: true }));
+    return true;
+  }
+
+  if (msg.type === "START_BULK_DORK") {
+    startBulkDorkQueue(msg.tabId, msg.text, msg.providerId).then(sendResponse);
+    return true;
+  }
+
+  if (msg.type === "STOP_BULK_DORK") {
+    stopBulkDork(false, msg.message || "Bulk dork stopped by user").then(() => sendResponse({ ok: true }));
+    return true;
+  }
+
+  if (msg.type === "GET_BULK_DORK_STATUS") {
+    getBulkState().then((bulk) => sendResponse(bulk || { active: false }));
+    return true;
+  }
+
 });

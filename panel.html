@@ -16,6 +16,8 @@
       --c-red: #d93025;
       --c-red-bg: #fce8e6;
       --c-green: #1e8e3e;
+      --c-auto-on: #188038;
+      --c-auto-on-hover: #137333;
       --c-orange: #e37400;
       --c-badge-bg: #d8eee8;
       --c-badge-text: #24584f;
@@ -24,7 +26,7 @@
       --c-bg: #292a2d; --c-bg-hover: #35363a; --c-bg-section: #202124;
       --c-border: #3c4043; --c-text: #e8eaed; --c-text-2: #9aa0a6; --c-text-3: #5f6368;
       --c-blue: #8ab4f8; --c-blue-bg: #1a3352; --c-red: #f28b82; --c-red-bg: #3c1f1e;
-      --c-green: #81c995; --c-orange: #fcad70;
+      --c-green: #81c995; --c-auto-on: #3d8f58; --c-auto-on-hover: #4caf6a; --c-orange: #fcad70;
       --c-badge-bg: #243d39; --c-badge-text: #9bcfc7;
     }
     @media (prefers-color-scheme: dark) {
@@ -32,7 +34,7 @@
         --c-bg: #292a2d; --c-bg-hover: #35363a; --c-bg-section: #202124;
         --c-border: #3c4043; --c-text: #e8eaed; --c-text-2: #9aa0a6; --c-text-3: #5f6368;
         --c-blue: #8ab4f8; --c-blue-bg: #1a3352; --c-red: #f28b82; --c-red-bg: #3c1f1e;
-        --c-green: #81c995; --c-orange: #fcad70;
+        --c-green: #81c995; --c-auto-on: #3d8f58; --c-auto-on-hover: #4caf6a; --c-orange: #fcad70;
         --c-badge-bg: #243d39; --c-badge-text: #9bcfc7;
       }
     }
@@ -68,6 +70,11 @@
       font-size: 10px; font-weight: 500;
     }
     .captcha-banner button:hover { background: var(--c-red); color: #fff; }
+    .captcha-banner.countdown {
+      background: var(--c-blue-bg); border-bottom-color: var(--c-blue);
+    }
+    .captcha-banner.countdown svg { fill: var(--c-blue); }
+    .captcha-banner.countdown span { color: var(--c-blue); }
 
     .done-banner {
       display: none; padding: 6px 10px;
@@ -154,18 +161,27 @@
       font-family: inherit; transition: all 0.15s; white-space: nowrap;
       height: 30px;
     }
-    .auto-btn:hover { border-color: var(--c-blue); color: var(--c-blue); background: var(--c-blue-bg); }
-    .auto-btn.on { border-color: var(--c-blue); background: var(--c-blue); color: #fff; }
+    .auto-btn:hover:not(.on) {
+      border-color: var(--c-blue); color: var(--c-blue); background: var(--c-blue-bg);
+    }
+    .auto-btn.on {
+      border-color: var(--c-auto-on); background: var(--c-auto-on); color: #fff;
+    }
+    .auto-btn.on:hover {
+      border-color: var(--c-auto-on-hover); background: var(--c-auto-on-hover); color: #fff;
+    }
     .auto-btn .dot-on {
-      width: 7px; height: 7px; border-radius: 50%; background: var(--c-green);
-      animation: pulse 1.5s ease-in-out infinite;
+      width: 7px; height: 7px; border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 0 0 1px color-mix(in srgb, #000 14%, transparent);
+      animation: auto-dot-pulse 1.5s ease-in-out infinite;
     }
     .auto-btn .dot-off {
       width: 7px; height: 7px; border-radius: 50%; background: var(--c-border);
     }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.3; }
+    @keyframes auto-dot-pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.55; transform: scale(0.88); }
     }
     .auto-bar .spacer { flex: 1; }
     .auto-bar .pg-label { font-size: 10px; color: var(--c-text-3); }
@@ -177,8 +193,83 @@
     }
     .max-pages:focus { border-color: var(--c-blue); }
     .auto-bar .pg-suffix { font-size: 10px; color: var(--c-text-3); }
+
+    .bulk-panel {
+      border-bottom: 1px solid var(--c-border);
+      background: var(--c-bg-section);
+      flex-shrink: 0;
+      font-size: 11px;
+    }
+    .bulk-panel.running { border-bottom-color: var(--c-blue); }
+    .bulk-head {
+      display: flex; align-items: center; gap: 8px;
+      padding: 5px 12px;
+    }
+    .bulk-toggle {
+      border: none; background: transparent; color: var(--c-text-2);
+      font: inherit; font-weight: 500; cursor: pointer; padding: 2px 0;
+    }
+    .bulk-toggle:hover { color: var(--c-blue); }
+    .bulk-status {
+      flex: 1; min-width: 0; color: var(--c-blue);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      font-size: 10px;
+    }
+    .bulk-body { padding: 0 12px 8px; }
+    .bulk-body[hidden] { display: none !important; }
+    .bulk-textarea {
+      width: 100%; min-height: 72px; max-height: 140px; resize: vertical;
+      border: 1px solid var(--c-border); border-radius: 4px;
+      padding: 6px 8px; font: 11px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
+      background: var(--c-bg); color: var(--c-text); outline: none;
+    }
+    .bulk-textarea:focus { border-color: var(--c-blue); }
+    .bulk-textarea:disabled { opacity: 0.65; }
+    .bulk-actions { display: flex; gap: 6px; margin-top: 6px; }
+    .bulk-btn {
+      padding: 4px 10px; border-radius: 4px; border: 1px solid var(--c-border);
+      background: var(--c-bg); color: var(--c-text-2); font: inherit; font-size: 11px;
+      cursor: pointer;
+    }
+    .bulk-btn:hover { border-color: var(--c-blue); color: var(--c-blue); }
+    .bulk-btn.primary { background: var(--c-blue); border-color: var(--c-blue); color: #fff; }
+    .bulk-btn.primary:hover { filter: brightness(1.05); }
+    .bulk-btn.danger { border-color: var(--c-red); color: var(--c-red); }
+    .bulk-btn.danger:hover { background: var(--c-red); color: #fff; }
+    .bulk-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .bulk-hint { margin-top: 5px; font-size: 10px; color: var(--c-text-3); line-height: 1.35; }
     .auto-status {
       font-size: 10px; color: var(--c-text-3); white-space: nowrap;
+    }
+    .mark-page-btn {
+      padding: 5px 10px; flex-shrink: 0;
+      border-color: color-mix(in srgb, #681da8 16%, var(--c-border));
+      color: var(--c-text-2);
+      background: transparent;
+    }
+    .mark-page-btn:hover {
+      border-color: color-mix(in srgb, #681da8 32%, var(--c-border));
+      color: color-mix(in srgb, #681da8 45%, var(--c-text));
+      background: color-mix(in srgb, #681da8 5%, var(--c-bg-section));
+    }
+    [data-theme="dark"] .mark-page-btn {
+      border-color: color-mix(in srgb, #c58af9 18%, var(--c-border));
+    }
+    [data-theme="dark"] .mark-page-btn:hover {
+      border-color: color-mix(in srgb, #c58af9 34%, var(--c-border));
+      color: color-mix(in srgb, #c58af9 42%, var(--c-text-2));
+      background: color-mix(in srgb, #c58af9 7%, var(--c-bg-section));
+    }
+    .manual-grab-btn {
+      padding: 5px 10px; flex-shrink: 0;
+      border-color: color-mix(in srgb, var(--c-blue) 20%, var(--c-border));
+      color: var(--c-text-2);
+      background: transparent;
+    }
+    .manual-grab-btn:hover {
+      border-color: color-mix(in srgb, var(--c-blue) 40%, var(--c-border));
+      color: var(--c-blue);
+      background: var(--c-blue-bg);
     }
 
     .ib {
@@ -260,6 +351,15 @@
     }
     .selection-actions.show { display: flex; }
 
+    .notif-hint {
+      margin: 0; padding: 4px 8px; font-size: 10px; line-height: 1.35;
+      color: var(--c-red); background: var(--c-red-bg, #fdecea);
+      border-radius: 4px;
+    }
+    [data-theme="dark"] .notif-hint {
+      background: rgba(217, 48, 37, 0.15);
+    }
+
     .settings-panel {
       display: none; flex-shrink: 0; padding: 8px 10px; gap: 7px;
       border-bottom: 1px solid var(--c-border); background: var(--c-bg-section);
@@ -320,6 +420,27 @@
     .prog { height: 2px; background: var(--c-border); flex-shrink: 0; overflow: hidden; display: none; }
     .prog.on { display: block; }
     .prog-bar { height: 100%; background: var(--c-blue); width: 0%; transition: width 0.3s; }
+
+    .session-stats-bar {
+      display: flex; align-items: center; gap: 6px;
+      padding: 4px 12px; border-bottom: 1px solid var(--c-border);
+      background: var(--c-bg-section);
+      font-size: 10px; flex-shrink: 0; min-width: 0;
+      overflow-x: auto; white-space: nowrap;
+      scrollbar-width: thin;
+    }
+    .session-stats-bar[hidden] { display: none !important; }
+    .session-stats-label {
+      color: var(--c-text-3); font-weight: 500; flex-shrink: 0;
+    }
+    .session-stats-chips {
+      display: inline-flex; align-items: center; gap: 2px; min-width: 0;
+    }
+    .session-domain-chip {
+      color: var(--c-text-2); font-variant-numeric: tabular-nums;
+    }
+    .session-domain-chip strong { color: var(--c-text); font-weight: 600; }
+    .session-domain-sep { color: var(--c-text-3); padding: 0 4px; user-select: none; }
 
     .global-stats {
       padding: 4px 12px 5px;
@@ -536,6 +657,68 @@
     .type-row .type-name { flex: 1; text-transform: uppercase; font-weight: 600; }
     .type-row .type-count { color: var(--c-text-3); font-variant-numeric: tabular-nums; }
 
+    .activity-panel {
+      border-top: 1px solid var(--c-border);
+      background: var(--c-bg-section);
+      flex-shrink: 0;
+      font-size: 10px;
+    }
+    .activity-head {
+      display: flex; align-items: center; gap: 6px;
+      padding: 4px 12px;
+    }
+    .activity-toggle {
+      border: none; background: transparent; color: var(--c-text-2);
+      font: inherit; font-weight: 500; cursor: pointer; padding: 2px 0; flex: 1; text-align: left;
+    }
+    .activity-toggle:hover { color: var(--c-blue); }
+    .activity-clear {
+      border: none; background: transparent; color: var(--c-text-3);
+      font: inherit; font-size: 10px; cursor: pointer; padding: 2px 6px;
+    }
+    .activity-clear:hover { color: var(--c-red); }
+    .activity-body { padding: 0 8px 6px; }
+    .activity-body[hidden] { display: none !important; }
+    .activity-list {
+      list-style: none; margin: 0; padding: 0;
+      max-height: 108px; overflow-y: auto;
+      border: 1px solid var(--c-border); border-radius: 4px;
+      background: var(--c-bg);
+    }
+    .activity-item {
+      display: grid; grid-template-columns: 52px 44px 1fr;
+      gap: 6px; align-items: start;
+      padding: 4px 6px; border-bottom: 1px solid var(--c-border);
+      line-height: 1.3;
+    }
+    .activity-item:last-child { border-bottom: none; }
+    .activity-time { color: var(--c-text-3); font-variant-numeric: tabular-nums; }
+    .activity-type {
+      font-size: 9px; font-weight: 600; text-transform: uppercase;
+      padding: 1px 4px; border-radius: 3px; text-align: center;
+      white-space: nowrap;
+    }
+    .activity-type.scan { background: #e8f5e9; color: #2e7d32; }
+    .activity-type.skip { background: #fff3e0; color: #e65100; }
+    .activity-type.captcha { background: var(--c-red-bg); color: var(--c-red); }
+    .activity-type.stuck { background: var(--c-red-bg); color: var(--c-red); }
+    .activity-type.end, .activity-type.done { background: var(--c-blue-bg); color: var(--c-blue); }
+    .activity-type.nav { background: var(--c-bg-hover); color: var(--c-text-2); }
+    .activity-type.bulk, .activity-type.mark { background: #f3e8fd; color: #6a1b9a; }
+    .activity-type.grab { background: #e3f2fd; color: #1565c0; }
+    [data-theme="dark"] .activity-type.bulk,
+    [data-theme="dark"] .activity-type.mark { background: #3b2748; color: #ce93d8; }
+    [data-theme="dark"] .activity-type.grab { background: #1a3a52; color: #90caf9; }
+    .activity-type.info { background: var(--c-bg-hover); color: var(--c-text-3); }
+    .activity-msg {
+      color: var(--c-text); min-width: 0;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .activity-item:hover .activity-msg { white-space: normal; word-break: break-word; }
+    .activity-empty {
+      padding: 8px; text-align: center; color: var(--c-text-3); font-size: 10px;
+    }
+
     .footer {
       padding: 4px 12px; border-top: 1px solid var(--c-border);
       font-size: 10px; color: var(--c-text-3);
@@ -547,7 +730,7 @@
 <body>
   <div class="captcha-banner" id="captchaBanner">
     <svg viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
-    <span data-i18n="captchaDetected">CAPTCHA detected — auto-next paused</span>
+    <span id="captchaBannerText" data-i18n="captchaDetected">CAPTCHA detected — auto-next paused</span>
     <button id="captchaShow" data-i18n="captchaShow">Show</button>
   </div>
 
@@ -569,6 +752,9 @@
     <button class="ib" id="btnGithub" data-tip="GitHub repository" data-i18n-tip="githubRepo" data-i18n-aria="githubRepo">
       <svg viewBox="0 0 24 24"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.1.79-.25.79-.56v-2.15c-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.27-1.68-1.27-1.68-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.68 1.24 3.34.95.1-.74.4-1.24.72-1.53-2.55-.29-5.23-1.28-5.23-5.68 0-1.25.45-2.28 1.18-3.08-.12-.29-.51-1.46.11-3.04 0 0 .96-.31 3.15 1.18A10.9 10.9 0 0 1 12 6.05c.97 0 1.94.13 2.85.39 2.19-1.49 3.15-1.18 3.15-1.18.62 1.58.23 2.75.11 3.04.73.8 1.18 1.83 1.18 3.08 0 4.42-2.69 5.39-5.25 5.67.41.36.77 1.06.77 2.13v3.17c0 .31.21.67.8.56A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z"/></svg>
     </button>
+    <button class="ib" id="btnSettings" data-tip="Settings" data-i18n-tip="settingsTooltip" data-i18n-aria="settingsTooltip">
+      <svg viewBox="0 0 24 24"><path d="M19.43 12.98c.04-.32.07-.65.07-.98s-.02-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.37-.31-.6-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98L14.5 2.42C14.47 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.5.42L9.12 5.07c-.61.25-1.18.59-1.69.98l-2.49-1c-.23-.08-.48 0-.6.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.08.65-.08.98s.03.66.08.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.37.31.6.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.04.24.25.42.5.42h4c.25 0 .47-.18.5-.42l.38-2.65c.61-.25 1.18-.59 1.69-.98l2.49 1c.23.08.48 0 .6-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5z"/></svg>
+    </button>
     <button class="ib" id="themeToggle" data-tip="Theme" data-i18n-tip="themeToggle" data-i18n-aria="themeToggle">
       <svg id="themeIcon" viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/></svg>
       <span class="badge" id="themeLbl">A</span>
@@ -586,6 +772,16 @@
       <span class="dot-off" id="autoDot"></span>
       <span id="autoLabel" data-i18n="autoNext">Auto-next</span>
     </button>
+    <button type="button" class="auto-btn mark-page-btn" id="markPageBtn"
+      data-tip="Mark all result links on this page as visited (purple)"
+      data-i18n-tip="markPageCompleteTip" data-i18n-aria="markPageComplete">
+      <span data-i18n="markPageComplete">Mark page</span>
+    </button>
+    <button type="button" class="auto-btn manual-grab-btn" id="manualGrabBtn"
+      data-tip="Collect all file links on this page, ignoring visited / already-tracked skip rules"
+      data-i18n-tip="manualGrabTip" data-i18n-aria="manualGrab">
+      <span data-i18n="manualGrab">Grab</span>
+    </button>
     <span class="auto-status" id="autoStatus"></span>
     <span class="spacer"></span>
     <span class="pg-label" data-i18n="max">Max</span>
@@ -593,11 +789,32 @@
     <span class="pg-suffix" data-i18n="pages">pages</span>
   </div>
 
+  <div class="bulk-panel" id="bulkPanel">
+    <div class="bulk-head">
+      <button type="button" class="bulk-toggle" id="bulkToggle" aria-expanded="false" data-i18n="bulkDorkTitle">Bulk dork</button>
+      <span class="bulk-status" id="bulkStatus"></span>
+    </div>
+    <div class="bulk-body" id="bulkBody" hidden>
+      <textarea class="bulk-textarea" id="bulkDorkInput" spellcheck="false"
+        data-i18n-placeholder="bulkDorkPlaceholder" rows="4"></textarea>
+      <div class="bulk-actions">
+        <button type="button" class="bulk-btn primary" id="bulkStartBtn" data-i18n="bulkDorkStart">Start queue</button>
+        <button type="button" class="bulk-btn danger" id="bulkStopBtn" hidden data-i18n="bulkDorkStop">Stop</button>
+      </div>
+      <p class="bulk-hint" data-i18n="bulkDorkHint">One dork per line (# = comment). Enables Auto-next and runs each dork on the active tab provider.</p>
+    </div>
+  </div>
+
   <div class="stats">
     <div class="stat"><div class="sv b" id="sTotal">0</div><div class="sl" data-i18n="statUrls">URLs</div></div>
     <div class="stat"><div class="sv" id="sOk">&mdash;</div><div class="sl" data-i18n="statValid">Valid</div></div>
     <div class="stat"><div class="sv" id="sFail">&mdash;</div><div class="sl" data-i18n="statDead">Dead</div></div>
     <div class="stat actionable" id="typesStat" role="button" tabindex="0" data-i18n-aria="availableTypes" data-i18n-title="availableTypes"><div class="sv m" id="sTypes">0</div><div class="sl" data-i18n="statTypes">Types</div></div>
+  </div>
+
+  <div class="session-stats-bar" id="sessionDomainBar" hidden>
+    <span class="session-stats-label" data-i18n="sessionDomainsLabel">Session</span>
+    <span class="session-stats-chips" id="sessionDomainChips"></span>
   </div>
 
   <div class="global-stats" id="globalStats" hidden></div>
@@ -626,12 +843,6 @@
       <svg viewBox="0 0 24 24"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
     </button>
     <span class="spacer"></span>
-    <button class="ib" id="btnSettings" data-tip="Settings" data-i18n-tip="settingsTooltip" data-i18n-aria="settingsTooltip">
-      <svg viewBox="0 0 24 24"><path d="M19.43 12.98c.04-.32.07-.65.07-.98s-.02-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.37-.31-.6-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98L14.5 2.42C14.47 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.5.42L9.12 5.07c-.61.25-1.18.59-1.69.98l-2.49-1c-.23-.08-.48 0-.6.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.08.65-.08.98s.03.66.08.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.37.31.6.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.04.24.25.42.5.42h4c.25 0 .47-.18.5-.42l.38-2.65c.61-.25 1.18-.59 1.69-.98l2.49 1c.23.08.48 0 .6-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5z"/></svg>
-    </button>
-    <button class="ib" id="btnAbout" data-tip="About" data-i18n-tip="aboutTooltip" data-i18n-aria="aboutTooltip">
-      <svg viewBox="0 0 24 24"><path d="M11 17h2v-6h-2v6zm1-14C6.48 3 2 7.48 2 13s4.48 10 10 10 10-4.48 10-10S17.52 3 12 3zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-12h2V7h-2v2z"/></svg>
-    </button>
     <button class="ib danger" id="btnRemoveDead" style="display:none" data-tip="Remove dead" data-i18n-tip="removeDead" data-i18n-aria="removeDead">
       <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
     </button>
@@ -647,6 +858,7 @@
     <label class="setting-field"><input type="checkbox" id="reuseValidationCache"> <span data-i18n="reuseValidationCache">Reuse validation cache</span></label>
     <label class="setting-field"><input type="checkbox" id="notifications"> <span data-i18n="notifications">Notifications</span></label>
     <label class="setting-field" data-i18n-tip="skipVisitedResultsTip"><input type="checkbox" id="skipVisitedResults"> <span data-i18n="skipVisitedResults">Skip visited results</span></label>
+    <p class="notif-hint" id="notifHint" hidden data-i18n="notifPermissionDenied"></p>
   </div>
 
   <div class="search-bar">
@@ -693,6 +905,17 @@
       <div class="empty-icon">&#128269;</div>
       <div class="empty-t" data-i18n="emptyTitle">No URLs collected yet</div>
       <div class="empty-d" data-i18n="emptyDesc">Run a dork query on any enabled provider.<br>Matching file URLs appear here automatically.</div>
+    </div>
+  </div>
+
+  <div class="activity-panel" id="activityPanel">
+    <div class="activity-head">
+      <button type="button" class="activity-toggle" id="activityToggle" aria-expanded="false" data-i18n="activityLogTitle">Activity log</button>
+      <button type="button" class="activity-clear" id="activityClearBtn" data-i18n="activityLogClear">Clear</button>
+    </div>
+    <div class="activity-body" id="activityBody" hidden>
+      <ul class="activity-list" id="activityList" aria-live="polite"></ul>
+      <p class="activity-empty" id="activityEmpty" hidden data-i18n="activityLogEmpty">No activity yet</p>
     </div>
   </div>
 

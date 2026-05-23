@@ -3,6 +3,24 @@
 const STORAGE_KEY = "dofiltor_urls";
 const SETTINGS_KEY = "dofiltor_settings";
 const AUTO_NEXT_ALERT_KEY = "dofiltor_auto_next_alert";
+const CAPTCHA_ALERT_KEY = "dofiltor_captcha_alert";
+const CAPTCHA_COUNTDOWN_KEY = "dofiltor_captcha_countdown";
+const ACTIVITY_LOG_KEY = "dofiltor_activity_log";
+const SESSION_STATS_KEY = "dofiltor_session_stats";
+
+const ACTIVITY_TYPE_I18N = {
+  scan: "activityTypeScan",
+  skip: "activityTypeSkip",
+  captcha: "activityTypeCaptcha",
+  stuck: "activityTypeStuck",
+  end: "activityTypeEnd",
+  done: "activityTypeDone",
+  nav: "activityTypeNav",
+  bulk: "activityTypeBulk",
+  mark: "activityTypeMark",
+  grab: "activityTypeGrab",
+  info: "activityTypeInfo",
+};
 const DEFAULT_SETTINGS = {
   autoNext: false,
   maxPages: 50,
@@ -527,6 +545,49 @@ function getDomains() {
     if (h) map[h] = (map[h] || 0) + 1;
   }
   return Object.entries(map).sort((a, b) => b[1] - a[1]);
+}
+
+function topSessionDomains(counts, limit) {
+  return Object.entries(counts || {})
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, limit || 8);
+}
+
+function renderSessionDomainBar(stats) {
+  const bar = $("sessionDomainBar");
+  const chips = $("sessionDomainChips");
+  if (!bar || !chips) return;
+
+  const top = topSessionDomains(stats && stats.domains, 8);
+  chips.replaceChildren();
+  if (!top.length) {
+    bar.hidden = true;
+    return;
+  }
+  bar.hidden = false;
+
+  top.forEach(([domain, count], index) => {
+    if (index > 0) {
+      const sep = document.createElement("span");
+      sep.className = "session-domain-sep";
+      sep.textContent = "\u00B7";
+      sep.setAttribute("aria-hidden", "true");
+      chips.appendChild(sep);
+    }
+    const chip = document.createElement("span");
+    chip.className = "session-domain-chip";
+    chip.title = domain + ": " + count;
+    chip.append(document.createTextNode(domain + " "));
+    const num = document.createElement("strong");
+    num.textContent = String(count);
+    chip.appendChild(num);
+    chips.appendChild(chip);
+  });
+}
+
+async function refreshSessionDomainStats() {
+  const stats = await sendMessage({ type: "GET_SESSION_STATS" });
+  renderSessionDomainBar(stats || { domains: {} });
 }
 
 function renderDomainBar() {
@@ -1254,6 +1315,8 @@ function updateAutoNextUI(enabled, status) {
   if (enabled && status && (status.status === "navigating" || status.status === "idle")) {
     const pg = status.page || 0;
     $("autoStatus").textContent = "Page " + pg + " \u2192 " + (status.next || pg + 1);
+  } else if (status && status.status === "stuck") {
+    $("autoStatus").textContent = status.message || t("autoNextStuck");
   } else if (!enabled && status && (status.status === "done" || status.status === "end")) {
     $("autoStatus").textContent = status.message || "Stopped";
   } else {
@@ -1267,6 +1330,247 @@ async function toggleAutoNext() {
   updateAutoNextUI(autoNextEnabled, null);
   updateAutoNextStatus();
 }
+
+async function markPageComplete() {
+  if (!extensionEnabled) {
+    setStatus(t("scopePaused"));
+    return;
+  }
+  const tab = await activeTab();
+  if (!tab?.id) {
+    setStatus(t("markPageCompleteFail"));
+    return;
+  }
+  const ping = await pingContentScript(tab.id);
+  if (!ping.alive) {
+    setStatus(t("markPageCompleteFail"));
+    return;
+  }
+  chrome.tabs.sendMessage(tab.id, { type: "MARK_PAGE_COMPLETE" }, (resp) => {
+    if (chrome.runtime.lastError || !resp?.ok) {
+      setStatus(t("markPageCompleteFail"));
+      return;
+    }
+    const count = resp.added != null ? resp.added : 0;
+    setStatus(t("markPageCompleteOk").replace("{count}", String(count)));
+  });
+}
+
+async function manualGrab() {
+  if (!extensionEnabled) {
+    setStatus(t("scopePaused"));
+    return;
+  }
+  const tab = await activeTab();
+  if (!tab?.id) {
+    setStatus(t("manualGrabFail"));
+    return;
+  }
+  const ping = await pingContentScript(tab.id);
+  if (!ping.alive) {
+    setStatus(t("manualGrabFail"));
+    return;
+  }
+  const btn = $("manualGrabBtn");
+  if (btn) btn.disabled = true;
+  chrome.tabs.sendMessage(tab.id, { type: "MANUAL_GRAB" }, (resp) => {
+    if (btn) btn.disabled = false;
+    if (chrome.runtime.lastError || !resp?.ok) {
+      const err = resp?.error;
+      if (err === "captcha") setStatus(t("captchaDetected"));
+      else if (err === "no_provider") setStatus(t("scopeUnsupported"));
+      else setStatus(t("manualGrabFail"));
+      return;
+    }
+    const found = resp.found != null ? resp.found : 0;
+    const added = resp.added != null ? resp.added : 0;
+    if (found === 0) {
+      setStatus(t("manualGrabNone"));
+      return;
+    }
+    setStatus(t("manualGrabOk").replace("{found}", String(found)).replace("{added}", String(added)));
+    loadUrls();
+  });
+}
+
+function formatBulkRunningLabel(bulk) {
+  if (!bulk || !bulk.active) return "";
+  const n = (bulk.index || 0) + 1;
+  const total = bulk.queries ? bulk.queries.length : bulk.total || 0;
+  const query = String(bulk.currentQuery || "").substring(0, 48);
+  return t("bulkDorkRunning")
+    .replace("{n}", String(n))
+    .replace("{total}", String(total))
+    .replace("{query}", query);
+}
+
+function setBulkPanelOpen(open) {
+  const body = $("bulkBody");
+  const toggle = $("bulkToggle");
+  if (!body || !toggle) return;
+  body.hidden = !open;
+  toggle.setAttribute("aria-expanded", open ? "true" : "false");
+}
+
+async function refreshBulkUI() {
+  const bulk = await sendMessage({ type: "GET_BULK_DORK_STATUS" });
+  const running = !!(bulk && bulk.active);
+  const panel = $("bulkPanel");
+  const startBtn = $("bulkStartBtn");
+  const stopBtn = $("bulkStopBtn");
+  const input = $("bulkDorkInput");
+  const statusEl = $("bulkStatus");
+
+  if (panel) panel.classList.toggle("running", running);
+  if (startBtn) startBtn.disabled = running;
+  if (input) input.disabled = running;
+  if (stopBtn) stopBtn.hidden = !running;
+  if (statusEl) statusEl.textContent = running ? formatBulkRunningLabel(bulk) : "";
+
+  if (running) {
+    setBulkPanelOpen(true);
+    autoNextEnabled = true;
+    settings.autoNext = true;
+    updateAutoNextUI(true, null);
+  }
+  return bulk;
+}
+
+async function startBulkDorkQueue() {
+  if (!extensionEnabled) {
+    setStatus(t("scopePaused"));
+    return;
+  }
+  const input = $("bulkDorkInput");
+  const text = input ? input.value : "";
+  try {
+    localStorage.setItem("dofiltor_bulk_text", text);
+  } catch (e) { /* ignore */ }
+
+  const tab = await activeTab();
+  if (!tab?.id) {
+    setStatus(t("bulkDorkNoTab"));
+    return;
+  }
+
+  const provider = (settings.providers || []).find((item) => providerMatchesUrl(item, tab.url));
+  const resp = await sendMessage({
+    type: "START_BULK_DORK",
+    tabId: tab.id,
+    text,
+    providerId: provider ? provider.id : "",
+  });
+
+  if (!resp || !resp.ok) {
+    if (resp && resp.error === "no_queries") setStatus(t("bulkDorkEmpty"));
+    else if (resp && resp.error === "no_provider") setStatus(t("bulkDorkNoProvider"));
+    else setStatus(t("bulkDorkStartFail"));
+    return;
+  }
+
+  const count = resp.bulk && resp.bulk.queries ? resp.bulk.queries.length : 0;
+  settings.autoNext = true;
+  autoNextEnabled = true;
+  updateAutoNextUI(true, null);
+  await refreshBulkUI();
+  setStatus(t("bulkDorkStarted").replace("{n}", String(count)));
+}
+
+async function stopBulkDorkQueue() {
+  await sendMessage({ type: "STOP_BULK_DORK" });
+  await refreshBulkUI();
+  setStatus(t("bulkDorkStopped"));
+}
+
+function handleBulkDorkStatus(msg) {
+  if (!msg) return;
+  refreshBulkUI();
+  if (msg.active) {
+    setStatus(formatBulkRunningLabel(msg) || msg.message || "");
+    return;
+  }
+  if (msg.completed) {
+    setStatus(msg.message || t("bulkDorkFinished"));
+    return;
+  }
+  if (msg.message) setStatus(msg.message);
+}
+
+function formatActivityTime(iso) {
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  } catch (e) {
+    return "";
+  }
+}
+
+function activityTypeLabel(type) {
+  const key = ACTIVITY_TYPE_I18N[type] || ACTIVITY_TYPE_I18N.info;
+  return t(key);
+}
+
+function setActivityPanelOpen(open) {
+  const body = $("activityBody");
+  const toggle = $("activityToggle");
+  if (!body || !toggle) return;
+  body.hidden = !open;
+  toggle.setAttribute("aria-expanded", open ? "true" : "false");
+  try {
+    localStorage.setItem("dofiltor_activity_open", open ? "1" : "0");
+  } catch (e) { /* ignore */ }
+}
+
+function renderActivityLog(log) {
+  const list = $("activityList");
+  const empty = $("activityEmpty");
+  if (!list) return;
+  const entries = Array.isArray(log) ? log.slice(0, 40) : [];
+  list.replaceChildren();
+  if (!entries.length) {
+    if (empty) empty.hidden = false;
+    return;
+  }
+  if (empty) empty.hidden = true;
+
+  for (const entry of entries) {
+    const type = String(entry.type || "info").toLowerCase();
+    const safeType = /^[a-z]+$/.test(type) ? type : "info";
+    const pageSuffix = entry.page != null && entry.page !== "" ? " · p" + entry.page : "";
+    const msg = safeText(entry.message) + pageSuffix;
+
+    const row = document.createElement("li");
+    row.className = "activity-item";
+
+    const timeEl = document.createElement("span");
+    timeEl.className = "activity-time";
+    timeEl.textContent = formatActivityTime(entry.time);
+
+    const typeEl = document.createElement("span");
+    typeEl.className = "activity-type " + safeType;
+    typeEl.textContent = activityTypeLabel(safeType);
+
+    const msgEl = document.createElement("span");
+    msgEl.className = "activity-msg";
+    msgEl.textContent = msg;
+    msgEl.title = msg;
+
+    row.append(timeEl, typeEl, msgEl);
+    list.appendChild(row);
+  }
+}
+
+async function refreshActivityLog() {
+  const log = await sendMessage({ type: "GET_ACTIVITY_LOG" });
+  renderActivityLog(Array.isArray(log) ? log : []);
+}
+
+async function clearActivityLog() {
+  await sendMessage({ type: "CLEAR_ACTIVITY_LOG" });
+  renderActivityLog([]);
+}
+
 function showDoneBanner(payload) {
   const banner = $("doneBanner");
   const text = $("doneBannerText");
@@ -1300,13 +1604,96 @@ async function updateAutoNextStatus() {
     handleAutoNextDone(status);
     return;
   }
+  if (status.status === "stuck") {
+    setStatus(status.message || t("autoNextStuck"));
+    updateAutoNextUI(autoNextEnabled, status);
+    return;
+  }
   const tab = await activeTab();
   const contentAlive = tab && tab.id != null ? (await pingContentScript(tab.id)).alive : false;
   updateAutoNextUI(autoNextEnabled, contentAlive ? status : null);
 }
+
+async function updateNotificationHint() {
+  const el = $("notifHint");
+  if (!el || !settings.notifications) {
+    if (el) el.hidden = true;
+    return;
+  }
+  const hint = await sendMessage({ type: "GET_NOTIF_HINT" });
+  if (hint && hint.blocked) {
+    el.textContent = t("notifPermissionDenied");
+    el.hidden = false;
+    return;
+  }
+  if (typeof chrome !== "undefined" && chrome.notifications?.getPermissionLevel) {
+    chrome.notifications.getPermissionLevel((level) => {
+      if (level === "denied") {
+        el.textContent = t("notifPermissionDenied");
+        el.hidden = false;
+      } else {
+        el.hidden = true;
+      }
+    });
+    return;
+  }
+  el.hidden = true;
+}
+function captchaResumeLabel(secondsLeft) {
+  return t("captchaResumeIn").replace("{seconds}", String(secondsLeft));
+}
+
+function handleCaptchaCountdown(msg) {
+  const banner = $("captchaBanner");
+  const text = $("captchaBannerText");
+  if (!banner || !text) return;
+
+  if (!msg || msg.done || (msg.secondsLeft != null && msg.secondsLeft <= 0)) {
+    banner.classList.remove("show", "countdown");
+    return;
+  }
+
+  const sec = msg.secondsLeft || 0;
+  banner.classList.add("show", "countdown");
+  const label = captchaResumeLabel(sec);
+  text.textContent = label;
+  setStatus(label);
+}
+
+function handleCaptchaAlert(payload) {
+  const banner = $("captchaBanner");
+  const text = $("captchaBannerText");
+  if (!banner) return;
+  const active = !!(payload && payload.active);
+  if (active) {
+    banner.classList.add("show");
+    banner.classList.remove("countdown");
+    if (text) text.textContent = t("captchaDetected");
+    setStatus(t("notifCaptchaMsg"));
+    hideDoneBanner();
+    return;
+  }
+  // Resolved: countdown UI takes over; do not hide banner here.
+}
+
 async function updateCaptchaBanner() {
   const status = await sendMessage({ type: "GET_CAPTCHA_STATUS" });
-  if (status) $("captchaBanner").classList.toggle("show", !!status.active);
+  if (status && status.active) handleCaptchaAlert(status);
+
+  if (!hasChromeStorage()) return;
+  chrome.storage.local.get(CAPTCHA_COUNTDOWN_KEY, (res) => {
+    const countdown = res && res[CAPTCHA_COUNTDOWN_KEY];
+    if (countdown && countdown.secondsLeft > 0) {
+      handleCaptchaCountdown({ secondsLeft: countdown.secondsLeft, done: false });
+    }
+  });
+}
+
+async function updateCaptchaCountdown() {
+  const countdown = await sendMessage({ type: "GET_CAPTCHA_COUNTDOWN" });
+  if (countdown && countdown.secondsLeft > 0) {
+    handleCaptchaCountdown({ secondsLeft: countdown.secondsLeft, done: false });
+  }
 }
 
 function ensureSelectedVisible() {
@@ -1400,7 +1787,6 @@ function initPopupUi() {
   bindClick("btnRemoveDead", removeDead);
   bindClick("btnClear", clearAll);
   bindClick("btnSettings", toggleSettingsPanel);
-  bindClick("btnAbout", () => openExtensionPage("options.html#about"));
   bindChange("sortKey", syncSort);
   bindClick("sortDirBtn", toggleSortDir);
   bindChange("exportFormat", () => {
@@ -1417,6 +1803,19 @@ function initPopupUi() {
   bindChange("skipVisitedResults", syncSettings);
   bindChange("maxPages", syncSettings);
   bindClick("autoNextBtn", toggleAutoNext);
+  bindClick("markPageBtn", markPageComplete);
+  bindClick("manualGrabBtn", manualGrab);
+  bindClick("bulkToggle", () => {
+    const body = $("bulkBody");
+    setBulkPanelOpen(body ? body.hidden : true);
+  });
+  bindClick("bulkStartBtn", startBulkDorkQueue);
+  bindClick("bulkStopBtn", stopBulkDorkQueue);
+  bindClick("activityToggle", () => {
+    const body = $("activityBody");
+    setActivityPanelOpen(body ? body.hidden : true);
+  });
+  bindClick("activityClearBtn", clearActivityLog);
   bindEl("urlList", "scroll", scheduleRenderList);
   bindEl("domainBar", "wheel", (e) => {
     const bar = $("domainBar");
@@ -1485,15 +1884,45 @@ document.addEventListener("DOMContentLoaded", async () => {
         allUrls = dedupeUrls(changes[STORAGE_KEY].newValue || []);
         if (!validating) refresh();
       }
+      if (changes[SETTINGS_KEY]) {
+        settings = { ...settings, ...(changes[SETTINGS_KEY].newValue || {}) };
+        autoNextEnabled = !!settings.autoNext;
+        updateAutoNextUI(autoNextEnabled, null);
+      }
       if (changes[AUTO_NEXT_ALERT_KEY]?.newValue) {
         handleAutoNextDone(changes[AUTO_NEXT_ALERT_KEY].newValue);
+      }
+      if (changes[CAPTCHA_ALERT_KEY]) {
+        const val = changes[CAPTCHA_ALERT_KEY].newValue;
+        if (val && val.active) handleCaptchaAlert(val);
+      }
+      if (changes[CAPTCHA_COUNTDOWN_KEY]) {
+        const val = changes[CAPTCHA_COUNTDOWN_KEY].newValue;
+        if (val && val.secondsLeft > 0) {
+          handleCaptchaCountdown({ secondsLeft: val.secondsLeft, done: false });
+        } else {
+          handleCaptchaCountdown({ done: true });
+        }
+      }
+      if (changes[ACTIVITY_LOG_KEY]) {
+        renderActivityLog(changes[ACTIVITY_LOG_KEY].newValue || []);
+      }
+      if (changes[SESSION_STATS_KEY]) {
+        renderSessionDomainBar(changes[SESSION_STATS_KEY].newValue || { domains: {} });
       }
     });
   }
 
   if (hasChromeRuntime()) {
     chrome.runtime.onMessage.addListener((msg) => {
-      if (msg && msg.type === "AUTO_NEXT_DONE") handleAutoNextDone(msg);
+      if (!msg) return;
+      if (msg.type === "AUTO_NEXT_DONE") handleAutoNextDone(msg);
+      if (msg.type === "CAPTCHA_DETECTED") handleCaptchaAlert(msg);
+      if (msg.type === "CAPTCHA_RESOLVED") { /* countdown banner follows */ }
+      if (msg.type === "CAPTCHA_COUNTDOWN") handleCaptchaCountdown(msg);
+      if (msg.type === "BULK_DORK_STATUS") handleBulkDorkStatus(msg);
+      if (msg.type === "ACTIVITY_LOG_UPDATED") renderActivityLog(msg.log || []);
+      if (msg.type === "SESSION_STATS_UPDATED") renderSessionDomainBar(msg.stats || { domains: {} });
     });
   }
 
@@ -1515,15 +1944,29 @@ document.addEventListener("DOMContentLoaded", async () => {
       $("reuseValidationCache").checked = settings.reuseValidationCache === true;
     }
     updateAutoNextUI(autoNextEnabled, null);
+    try {
+      const savedBulk = localStorage.getItem("dofiltor_bulk_text");
+      if (savedBulk != null && $("bulkDorkInput")) $("bulkDorkInput").value = savedBulk;
+    } catch (e) { /* ignore */ }
+    refreshBulkUI();
+    try {
+      setActivityPanelOpen(localStorage.getItem("dofiltor_activity_open") === "1");
+    } catch (e) { /* ignore */ }
+    refreshActivityLog();
+    refreshSessionDomainStats();
     refresh();
     updateScopeIndicator();
     updateCaptchaBanner();
+    updateCaptchaCountdown();
     updateAutoNextStatus();
+    updateNotificationHint();
     if (hasChromeStorage()) {
-      chrome.storage.local.get(AUTO_NEXT_ALERT_KEY, (res) => {
-        const alert = res && res[AUTO_NEXT_ALERT_KEY];
-        if (alert && alert.time && Date.now() - alert.time < 120000) {
-          handleAutoNextDone(alert);
+      chrome.storage.local.get([AUTO_NEXT_ALERT_KEY, CAPTCHA_ALERT_KEY], (res) => {
+        const captcha = res && res[CAPTCHA_ALERT_KEY];
+        if (captcha && captcha.active) handleCaptchaAlert(captcha);
+        const done = res && res[AUTO_NEXT_ALERT_KEY];
+        if (done && done.time && Date.now() - done.time < 120000) {
+          handleAutoNextDone(done);
         }
       });
     }
@@ -1532,7 +1975,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   setInterval(async () => {
     updateCaptchaBanner();
+    updateCaptchaCountdown();
     updateAutoNextStatus();
+    updateNotificationHint();
     updateScopeIndicator();
     const urls = await loadUrls();
     if (JSON.stringify(urls) !== JSON.stringify(allUrls)) {

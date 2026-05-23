@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- **Fix** — Background no longer logs `Could not establish connection` when the side panel is closed (runtime broadcasts use a safe helper with callback + promise catch).
+- **Manual grab** — Side panel **Grab** button collects all file links on the current search page, ignoring skip-visited / session-collected / panel-known rules (URLs already in the list are not duplicated).
+- **Mark page done** — Side panel button marks every result link on the current search page as visited (purple styling), same visual state as after auto-next, without advancing pagination.
+- **Bulk dork queue** — Collapsible panel: one dork per line (`#` comments), auto-enables auto-next, runs each dork sequentially when the previous finishes (last page / max pages / end of results). Stop button; progress label `Dork n/total`.
+- **CAPTCHA resume countdown** — After CAPTCHA clears, 8-second countdown before auto-next resumes (floating badge on the page + blue banner in the side panel: “Resuming in Ns…” / “Lanjut dalam N dtk…”).
+- **Activity log** — Collapsible debug panel (scan, skip visited, CAPTCHA, stuck, last page, bulk, mark, navigation); ring buffer in storage; clear button.
+- **Session domain stats** — Bar under the stats row: top domains collected this session (`host count · …`), live updates, resets on **Clear all**.
+- **Skip visited results** — Setting + storage sync fix: `dofiltor_collected_*` vs `dofiltor_seen_*` so auto-next marking does not cause the next scan to skip the whole page; skip count logged to activity log.
+- **Auto-next / end-of-results** — Stricter last-page detection (no false “done” on page 2); done banner + notifications; stuck state stops bulk queue; activity log entries for nav/done/end/stuck.
+- **CAPTCHA detection** — `/sorry` and provider challenge paths in manifest; check runs before provider gate; desktop notification + side panel banner; polling while enabled.
+- **UI** — Softer **Mark page** hover accent; **Auto-next** on state uses solid green + white pulse dot (was blue button with low-contrast green dot).
+- **UI** — **Settings** moved to the header (next to theme toggle); **About** removed from the side panel toolbar (about info remains on the options page).
+- **i18n** — New strings for the above (EN + ID); `provider-utils.js` tests; locale check covers 250 keys.
+
 ## 3.5.3
 
 - Removed `popup.js` entirely; side panel loads `ui-panel.js` (breaks stale `popup.js?v=3.5.0` cache).
