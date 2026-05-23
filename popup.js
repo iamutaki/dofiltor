@@ -139,6 +139,22 @@ function sendMessage(msg) {
   });
 }
 
+function syncActionBadge(count) {
+  const n = Math.max(0, Number(count) || 0);
+  if (typeof chrome !== "undefined" && chrome.action?.setBadgeText) {
+    return new Promise((resolve) => {
+      chrome.action.setBadgeText({ text: n > 0 ? String(n) : "" }, () => {
+        if (chrome.runtime?.lastError) { /* ignore */ }
+        if (n > 0 && chrome.action?.setBadgeBackgroundColor) {
+          chrome.action.setBadgeBackgroundColor({ color: "#2563eb" });
+        }
+        resolve();
+      });
+    });
+  }
+  return sendMessage({ type: "UPDATE_BADGE", count: n });
+}
+
 function loadTheme() { return localStorage.getItem("dofiltor_theme") || "auto"; }
 function saveTheme(t) { localStorage.setItem("dofiltor_theme", t); }
 function applyTheme(t) {
@@ -980,10 +996,12 @@ async function clearAll() {
   allUrls = [];
   selectedUrls.clear();
   await saveUrls(allUrls);
+  await syncActionBadge(0);
   showUndo("Cleared " + previous.length + " URLs", async () => {
     allUrls = previous;
     selectedUrls = previousSelection;
     await saveUrls(allUrls);
+    await syncActionBadge(allUrls.length);
     refresh();
   });
   refresh();
