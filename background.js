@@ -56,6 +56,29 @@ function saveUrls(urls) {
   });
 }
 
+function setUrlValidationState(url, patch) {
+  const key = normalizeFileUrl(url);
+  if (!key) return Promise.resolve(false);
+  return getUrls().then((urls) => {
+    const item = urls.find((u) => normalizeFileUrl(u.url) === key);
+    if (!item) return false;
+    if (patch.status != null) item.status = patch.status;
+    if (patch.size != null) item.size = patch.size;
+    return saveUrls(urls).then(() => true);
+  });
+}
+
+function runUrlValidation(url, settings) {
+  return setUrlValidationState(url, { status: "checking" }).then(() =>
+    checkUrlWithCache(url, settings.validateMode, settings).then((result) =>
+      setUrlValidationState(url, {
+        status: result.ok ? "ok" : "fail",
+        size: result.size || null,
+      }).then(() => result)
+    )
+  );
+}
+
 function normalizeFileUrl(url) {
   try {
     const parsed = new URL(url);
@@ -263,16 +286,7 @@ function incrementGlobalStats(delta) {
 
 function autoCheckUrl(url) {
   getSettings().then((settings) => {
-    checkUrlWithCache(url, settings.validateMode, settings).then((result) => {
-      getUrls().then((urls) => {
-        const item = urls.find((u) => u.url === url);
-        if (item) {
-          item.status = result.ok ? "ok" : "fail";
-          if (result.size) item.size = result.size;
-          saveUrls(urls);
-        }
-      });
-    });
+    runUrlValidation(url, settings);
   });
 }
 
@@ -287,20 +301,11 @@ function processAutoValidateQueue() {
       return;
     }
     const nextUrl = autoValidateQueue.shift();
-    checkUrlWithCache(nextUrl, settings.validateMode, settings).then((result) => {
-      getUrls().then((urls) => {
-        const item = urls.find((u) => u.url === nextUrl);
-        if (item) {
-          item.status = result.ok ? "ok" : "fail";
-          if (result.size) item.size = result.size;
-          saveUrls(urls);
-        }
-      }).finally(() => {
-        setTimeout(() => {
-          autoValidateBusy = false;
-          processAutoValidateQueue();
-        }, Math.max(500, Number(settings.validateDelay) || DEFAULT_SETTINGS.validateDelay));
-      });
+    runUrlValidation(nextUrl, settings).finally(() => {
+      setTimeout(() => {
+        autoValidateBusy = false;
+        processAutoValidateQueue();
+      }, Math.max(500, Number(settings.validateDelay) || DEFAULT_SETTINGS.validateDelay));
     });
   });
 }
@@ -349,17 +354,20 @@ function saveHistory(h) {
 
 function addHistoryEntry(query, urlCount, meta) {
   meta = meta || {};
+  const normalized = normalizeDorkQuery(query);
+  if (!normalized) return Promise.resolve();
   return getSettings().then((settings) => getHistory().then((history) => {
     const now = new Date().toISOString();
-    const existing = history.find((h) => h.query === query);
+    const existing = history.find((h) => dorkQueriesMatch(h.query, normalized));
     if (existing) {
+      existing.query = normalized;
       existing.pages = (existing.pages || 0) + 1;
       existing.urls = (existing.urls || 0) + urlCount;
       existing.lastScan = now;
       if (meta.provider) existing.provider = meta.provider;
     } else {
       history.unshift({
-        query: query,
+        query: normalized,
         urls: urlCount,
         pages: 1,
         provider: meta.provider || null,
@@ -371,6 +379,36 @@ function addHistoryEntry(query, urlCount, meta) {
     const max = Math.max(10, Number(settings.dorkHistoryMax) || DEFAULT_SETTINGS.dorkHistoryMax);
     return saveHistory(history.slice(0, max));
   }));
+}
+
+function normalizeDorkQuery(query) {
+  return String(query || "").trim().replace(/\s+/g, " ");
+}
+
+function dorkQueriesMatch(a, b) {
+  const left = normalizeDorkQuery(a).toLowerCase();
+  const right = normalizeDorkQuery(b).toLowerCase();
+  return !!left && left === right;
+}
+
+function lookupDorkCapture(query) {
+  const normalized = normalizeDorkQuery(query);
+  if (!normalized) {
+    return Promise.resolve({ captured: false, query: "", urlCount: 0, pages: 0, lastScan: null, provider: null });
+  }
+  return Promise.all([getHistory(), getUrls()]).then(([history, urls]) => {
+    const hist = history.find((h) => dorkQueriesMatch(h.query, normalized));
+    const urlCount = urls.filter((u) => dorkQueriesMatch(u.query, normalized)).length;
+    const captured = !!(hist || urlCount > 0);
+    return {
+      captured,
+      query: normalized,
+      urlCount: Math.max(urlCount, hist?.urls || 0),
+      pages: hist?.pages || 0,
+      lastScan: hist?.lastScan || null,
+      provider: hist?.provider || null,
+    };
+  });
 }
 
 // --- Settings ---
@@ -567,7 +605,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 
   if (msg.type === "CHECK_URL") {
-    getSettings().then((settings) => checkUrlWithCache(msg.url, settings.validateMode, settings).then(sendResponse));
+    getSettings().then((settings) => runUrlValidation(msg.url, settings).then(sendResponse));
     return true;
   }
 
@@ -661,6 +699,34 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
   if (msg.type === "GET_HISTORY") {
     getHistory().then(sendResponse);
+    return true;
+  }
+
+  if (msg.type === "LOOKUP_DORK") {
+    lookupDorkCapture(msg.query).then(sendResponse);
+    return true;
+  }
+
+  if (msg.type === "WARN_DORK_CAPTURED") {
+    lookupDorkCapture(msg.query).then((info) => {
+      if (!info.captured) {
+        sendResponse({ warned: false });
+        return;
+      }
+      getSettings().then((settings) => {
+        if (settings.notifications) {
+          chrome.notifications.create("dork-captured", {
+            type: "basic",
+            iconUrl: "icons/icon128.png",
+            title: "Dork File Collector",
+            message: info.urlCount + " URLs already saved for this dork query.",
+            priority: 1,
+          });
+          setTimeout(() => chrome.notifications.clear("dork-captured"), 5000);
+        }
+        sendResponse({ warned: true, ...info });
+      });
+    });
     return true;
   }
 

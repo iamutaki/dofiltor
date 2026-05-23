@@ -253,6 +253,29 @@ function providerMatchesUrl(provider, url) {
     return false;
   }
 }
+function normalizeDorkQuery(query) {
+  return String(query || "").trim().replace(/\s+/g, " ");
+}
+function getDorkQueryFromUrl(url, provider) {
+  if (!url || !provider) return "";
+  try {
+    const parsed = new URL(url);
+    const param = String(provider.queryParam || "q").trim() || "q";
+    return normalizeDorkQuery(parsed.searchParams.get(param) || "");
+  } catch (e) {
+    return "";
+  }
+}
+function formatDorkWhen(iso) {
+  if (!iso) return "";
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+  } catch (e) {
+    return "";
+  }
+}
 function activeTabUrl() {
   if (!hasChromeTabs()) return Promise.resolve("");
   return new Promise((resolve) => {
@@ -290,6 +313,18 @@ async function updateScopeIndicator() {
   if (!hasPermission) {
     setScope("permission", t("scopePermissionNeeded", { provider: provider.name || provider.id || "Provider" }));
     return;
+  }
+  const dorkQuery = getDorkQueryFromUrl(url, provider);
+  if (dorkQuery) {
+    const prior = await sendMessage({ type: "LOOKUP_DORK", query: dorkQuery });
+    if (prior?.captured) {
+      const when = formatDorkWhen(prior.lastScan);
+      const msg = when
+        ? t("scopeDorkCapturedWhen", { n: prior.urlCount, when })
+        : t("scopeDorkCaptured", { n: prior.urlCount });
+      setScope("duplicate", msg);
+      return;
+    }
   }
   setScope("collecting", t("scopeCollecting", { provider: provider.name || provider.id || "Provider" }));
 }
@@ -386,7 +421,12 @@ function itemFieldValue(item, field) {
   if (field === "domain" || field === "host") return hostOf(item.url);
   if (field === "file" || field === "filename" || field === "name") return nameOf(item.url);
   if (field === "type" || field === "ext") return item.file_type || "";
-  if (field === "status") return item.status === "ok" ? "valid ok" : item.status === "fail" ? "dead fail" : "pending";
+  if (field === "status") {
+    if (item.status === "ok") return "valid ok";
+    if (item.status === "fail") return "dead fail";
+    if (item.status === "checking") return "checking processing";
+    return "pending";
+  }
   if (field === "url") return item.url || "";
   return [nameOf(item.url), hostOf(item.url), item.url].join(" ");
 }
@@ -409,15 +449,15 @@ function parseAdvancedFilter(raw) {
 
 function updateStats() {
   const n = allUrls.length;
-  const checked = allUrls.filter((u) => u.status);
-  const ok = checked.filter((u) => u.status === "ok").length;
-  const fail = checked.filter((u) => u.status === "fail").length;
+  const ok = allUrls.filter((u) => u.status === "ok").length;
+  const fail = allUrls.filter((u) => u.status === "fail").length;
+  const checkingCount = allUrls.filter((u) => u.status === "checking").length;
   const types = new Set(allUrls.map((u) => u.file_type).filter(Boolean)).size;
   const downloaded = allUrls.filter((u) => u.downloaded).length;
 
   $("sTotal").textContent = n;
-  $("sOk").textContent = checked.length ? ok : "\u2014";
-  $("sFail").textContent = checked.length ? fail : "\u2014";
+  $("sOk").textContent = ok || fail || checkingCount ? ok : "\u2014";
+  $("sFail").textContent = ok || fail || checkingCount ? fail : "\u2014";
   $("sTypes").textContent = types;
   $("btnRemoveDead").style.display = fail > 0 ? "flex" : "none";
   $("fRight").textContent = n + " URLs" + (downloaded ? " \u00B7 " + downloaded + " downloaded" : "");
@@ -426,7 +466,8 @@ function updateStats() {
   $("batchBadge").textContent = batchable;
   $("batchBadge").style.display = batchable > 0 ? "block" : "none";
 
-  if (!validating) $("hSub").textContent = n ? t("urlsCount", { n: String(n), types: String(types) }) : t("appSubtitle");
+  if (!validating && !checkingCount) $("hSub").textContent = n ? t("urlsCount", { n: String(n), types: String(types) }) : t("appSubtitle");
+  else if (checkingCount) $("hSub").textContent = t("statusCheckingCount", { n: checkingCount });
   renderGlobalStats();
 }
 
@@ -516,7 +557,11 @@ function getSortedFiltered() {
     let bv = "";
     if (sortKey === "size") { av = Number(a.size) || 0; bv = Number(b.size) || 0; }
     else if (sortKey === "domain") { av = hostOf(a.url); bv = hostOf(b.url); }
-    else if (sortKey === "status") { av = a.status || "pending"; bv = b.status || "pending"; }
+    else if (sortKey === "status") {
+      const rank = (s) => ({ checking: 1, pending: 0, ok: 2, fail: 3 }[s || "pending"] ?? 0);
+      av = rank(a.status);
+      bv = rank(b.status);
+    }
     else if (sortKey === "type") { av = a.file_type || ""; bv = b.file_type || ""; }
     else { av = a.discovered_at || ""; bv = b.discovered_at || ""; }
     if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
@@ -632,7 +677,10 @@ function renderRow(item, viewIndex) {
   mt.appendChild(hostSpan);
   const statusChip = document.createElement("span");
   statusChip.className = "status-chip " + status;
-  statusChip.textContent = t(status === "ok" ? "valid" : status === "fail" ? "dead" : "pending");
+  if (status === "ok") statusChip.textContent = t("valid");
+  else if (status === "fail") statusChip.textContent = t("dead");
+  else if (status === "checking") statusChip.textContent = t("checking");
+  else statusChip.textContent = t("pending");
   mt.appendChild(statusChip);
   if (item.size) {
     const sz = document.createElement("span");
@@ -691,6 +739,7 @@ function refresh() {
   renderSortUI();
   updateFilterAction();
   renderList();
+  updateScopeIndicator();
 }
 
 async function startValidate() {
@@ -701,13 +750,16 @@ async function startValidate() {
   const bar = $("prog");
   const fill = $("progBar");
   bar.classList.add("on");
-  const todo = getSortedFiltered().filter((u) => !u.status);
+  const todo = getSortedFiltered().filter((u) => !u.status || u.status === "pending");
   let done = 0;
 
   for (const item of todo) {
     fill.style.width = (todo.length ? done / todo.length * 100 : 100) + "%";
     $("hSub").textContent = "Checking " + (done + 1) + "/" + todo.length + "...";
-    setStatus("Validating...");
+    setStatus(t("checking") + " " + (done + 1) + "/" + todo.length + "...");
+
+    item.status = "checking";
+    renderList();
 
     const r = await sendMessage({ type: "CHECK_URL", url: item.url }) || { ok: false, size: null };
     item.status = r.ok ? "ok" : "fail";
@@ -1327,6 +1379,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   applyI18n();
   applyAppVersion();
   initTooltip();
+
+  if (hasChromeStorage()) {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== "local" || !changes[STORAGE_KEY]) return;
+      allUrls = dedupeUrls(changes[STORAGE_KEY].newValue || []);
+      if (!validating) refresh();
+    });
+  }
 
   Promise.all([loadUrls(), loadSettings(), loadGlobalStats()]).then(([urls, loadedSettings]) => {
     allUrls = urls;

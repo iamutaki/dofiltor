@@ -182,6 +182,22 @@ function getQueryFromUrl() {
   return params.get(provider?.queryParam || "q") || "";
 }
 
+function normalizeDorkQuery(query) {
+  return String(query || "").trim().replace(/\s+/g, " ");
+}
+
+let lastWarnedDork = "";
+
+function warnIfDorkAlreadyCaptured() {
+  const provider = getActiveProvider();
+  if (!provider || !settings.enabled) return;
+  const query = normalizeDorkQuery(getQueryFromUrl());
+  if (!query || query === lastWarnedDork) return;
+  sendMsg({ type: "WARN_DORK_CAPTURED", query }, (resp) => {
+    if (resp && resp.warned) lastWarnedDork = query;
+  });
+}
+
 function getPageNumber() {
   const params = new URLSearchParams(window.location.search);
   const start = parseInt(params.get("start") || "0", 10);
@@ -407,6 +423,7 @@ loadSettings().then(() => {
   setTimeout(() => {
     if (contextDead) return;
     if (!getActiveProvider()) return;
+    warnIfDorkAlreadyCaptured();
     scan();
 
     if (settings.autoNext) {
@@ -426,6 +443,7 @@ const urlObserver = new MutationObserver(() => {
 
     setTimeout(() => {
       if (contextDead) return;
+      warnIfDorkAlreadyCaptured();
       scan();
 
       if (settings.autoNext && !captchaDetected) {

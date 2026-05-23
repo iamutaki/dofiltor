@@ -94,6 +94,7 @@
     }
     .scope-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--c-border); flex-shrink: 0; }
     .scope-bar.collecting .scope-dot { background: var(--c-green); }
+    .scope-bar.duplicate .scope-dot { background: var(--c-orange); }
     .scope-bar.paused .scope-dot { background: var(--c-orange); }
     .scope-bar.unsupported .scope-dot,
     .scope-bar.permission .scope-dot { background: var(--c-red); }
@@ -363,6 +364,15 @@
     .dot-ok { background: var(--c-green); }
     .dot-fail { background: var(--c-red); }
     .dot-pending { background: var(--c-border); }
+    .dot-checking {
+      background: var(--c-blue);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--c-blue) 25%, transparent);
+      animation: dot-pulse 1s ease-in-out infinite;
+    }
+    @keyframes dot-pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.55; transform: scale(0.85); }
+    }
 
     .ficon {
       flex-shrink: 0; width: 28px; height: 28px; border-radius: 5px;
@@ -411,8 +421,20 @@
       color: var(--c-red); border-color: color-mix(in srgb, var(--c-red) 45%, var(--c-border));
       background: color-mix(in srgb, var(--c-red) 10%, transparent);
     }
+    .status-chip.checking {
+      color: var(--c-blue); border-color: color-mix(in srgb, var(--c-blue) 45%, var(--c-border));
+      background: color-mix(in srgb, var(--c-blue) 12%, transparent);
+      animation: chip-pulse 1.2s ease-in-out infinite;
+    }
+    @keyframes chip-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.65; }
+    }
     .row.status-ok .ficon { border-color: color-mix(in srgb, var(--c-green) 40%, var(--c-border)); }
     .row.status-fail .ficon { border-color: color-mix(in srgb, var(--c-red) 45%, var(--c-border)); }
+    .row.status-checking .ficon {
+      border-color: color-mix(in srgb, var(--c-blue) 45%, var(--c-border));
+    }
 
     .racts { display: flex; gap: 0; flex-shrink: 0; opacity: 0; transition: opacity 0.1s; }
     .row:hover .racts { opacity: 1; }

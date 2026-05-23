@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Warn when the current tab's dork query was already captured before (scope bar in popup + optional notification on the search page).
+- Show a **Checking** state on rows while URL validation is in progress (manual validate and auto-validate).
 - Provider rule test: **Use active tab** fills the URL from the current browser tab; results show per-rule pass/fail aligned with real collection (host/path), plus query-param and enabled checks.
 
 ## 3.5.0
