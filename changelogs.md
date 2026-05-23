@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Provider rule test: **Use active tab** fills the URL from the current browser tab; results show per-rule pass/fail aligned with real collection (host/path), plus query-param and enabled checks.
+
 ## 3.5.0
 
 - Expanded default capture extensions for generic office formats: OpenDocument (ODP, ODG, ODF, ODB, flat ODF), Microsoft Office templates and macro-enabled files, legacy StarOffice, and other suites (WordPerfect, AbiWord, HWP, Apple iWork).

@@ -98,22 +98,120 @@ function providerOrigins(provider) {
 }
 
 function providerMatchesTestUrl(provider, url) {
+  return evaluateProviderRules(provider, url).pageMatch;
+}
+
+function evaluateProviderRules(provider, url) {
+  const enabled = provider.enabled !== false;
+  let parsed = null;
+  let urlValid = false;
   try {
-    const parsed = new URL(url);
-    const hostNeedle = String(provider.hostContains || "").toLowerCase();
-    const pathNeedle = String(provider.pathContains || "").toLowerCase();
-    const queryParam = String(provider.queryParam || "").trim();
-    return {
-      ok: (!hostNeedle || parsed.hostname.toLowerCase().includes(hostNeedle)) &&
-        (!pathNeedle || parsed.pathname.toLowerCase().includes(pathNeedle)) &&
-        (!queryParam || parsed.searchParams.has(queryParam)),
-      host: !hostNeedle || parsed.hostname.toLowerCase().includes(hostNeedle),
-      path: !pathNeedle || parsed.pathname.toLowerCase().includes(pathNeedle),
-      query: !queryParam || parsed.searchParams.has(queryParam),
-    };
+    parsed = new URL(url);
+    urlValid = /^https?:$/i.test(parsed.protocol);
   } catch (e) {
-    return { ok: false, host: false, path: false, query: false };
+    parsed = null;
   }
+  const hostNeedle = String(provider.hostContains || "").toLowerCase();
+  const pathNeedle = String(provider.pathContains || "").toLowerCase();
+  const queryParam = String(provider.queryParam || "").trim();
+  const host = !hostNeedle || (urlValid && parsed.hostname.toLowerCase().includes(hostNeedle));
+  const path = !pathNeedle || (urlValid && parsed.pathname.toLowerCase().includes(pathNeedle));
+  const query = !queryParam || (urlValid && parsed.searchParams.has(queryParam));
+  const pageMatch = urlValid && host && path;
+  return {
+    urlValid,
+    host,
+    path,
+    query,
+    pageMatch,
+    collects: pageMatch && enabled,
+    enabled,
+    hostname: urlValid ? parsed.hostname : "",
+    pathname: urlValid ? parsed.pathname : "",
+  };
+}
+
+function getActiveTabUrl() {
+  if (typeof chrome === "undefined" || !chrome.tabs?.query) return Promise.resolve("");
+  return new Promise((resolve) => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      resolve(tabs && tabs[0] ? tabs[0].url || "" : "");
+    });
+  });
+}
+
+function readProviderFromBox(box) {
+  return {
+    enabled: box.querySelector(".provider-enabled").checked,
+    hostContains: box.querySelector(".provider-host").value.trim().toLowerCase(),
+    pathContains: box.querySelector(".provider-path").value.trim(),
+    queryParam: box.querySelector(".provider-query").value.trim() || "q",
+  };
+}
+
+function renderProviderTestResult(box, result) {
+  const detail = box.querySelector(".provider-test-detail");
+  if (!detail) return;
+  detail.textContent = "";
+  if (!result.url) {
+    const line = document.createElement("span");
+    line.className = "summary fail";
+    line.textContent = t("providerTestNoUrl");
+    detail.appendChild(line);
+    return;
+  }
+  if (!result.urlValid) {
+    const line = document.createElement("span");
+    line.className = "summary fail";
+    line.textContent = t("providerTestUrlInvalid");
+    detail.appendChild(line);
+    return;
+  }
+  const rules = [
+    ["host", result.host, t("providerTestHost", { needle: result.hostNeedle || "—", host: result.hostname })],
+    ["path", result.path, t("providerTestPath", { needle: result.pathNeedle || "—", path: result.pathname })],
+    ["query", result.query, t("providerTestQuery", { param: result.queryParam || "—" })],
+    ["enabled", result.enabled, t("providerTestEnabled")],
+  ];
+  for (const [, pass, label] of rules) {
+    const line = document.createElement("span");
+    line.className = "rule " + (pass ? "pass" : "fail");
+    line.textContent = (pass ? "✓ " : "✗ ") + label;
+    detail.appendChild(line);
+  }
+  if (result.pageMatch && !result.query) {
+    const warn = document.createElement("span");
+    warn.className = "rule warn";
+    warn.textContent = "⚠ " + t("providerTestQueryWarn");
+    detail.appendChild(warn);
+  }
+  const summary = document.createElement("span");
+  summary.className = "summary " + (result.collects ? "pass" : "fail");
+  summary.textContent = result.collects ? t("providerTestCollects") : t("providerTestNoCollect");
+  detail.appendChild(summary);
+}
+
+function runProviderTest(box, urlOverride) {
+  const input = box.querySelector(".provider-test-url");
+  const url = String(urlOverride != null ? urlOverride : input.value).trim();
+  if (urlOverride != null) input.value = url;
+  const provider = readProviderFromBox(box);
+  const evaluated = evaluateProviderRules(provider, url);
+  renderProviderTestResult(box, {
+    url,
+    urlValid: evaluated.urlValid,
+    host: evaluated.host,
+    path: evaluated.path,
+    query: evaluated.query,
+    enabled: evaluated.enabled,
+    pageMatch: evaluated.pageMatch,
+    collects: evaluated.collects,
+    hostname: evaluated.hostname,
+    pathname: evaluated.pathname,
+    hostNeedle: provider.hostContains,
+    pathNeedle: provider.pathContains,
+    queryParam: provider.queryParam,
+  });
 }
 
 function providerPermissionState(provider) {
@@ -216,31 +314,54 @@ function providerTemplate(provider, index) {
     makeField("Host contains", "provider-host", provider.hostContains || ""),
     makeField("Path contains", "provider-path", provider.pathContains || ""),
     makeField("Query param", "provider-query", provider.queryParam || "q"),
-    makeField("Next selector", "provider-next", provider.nextSelector || ""),
-    makeField("Test URL", "provider-test-url", "")
+    makeField("Next selector", "provider-next", provider.nextSelector || "")
   );
 
-  const removeWrap = document.createElement("div");
-  removeWrap.style.marginTop = "8px";
-  removeWrap.style.display = "flex";
-  removeWrap.style.alignItems = "center";
-  removeWrap.style.gap = "8px";
+  const testField = document.createElement("label");
+  testField.className = "field provider-test-field";
+  const testLabel = document.createElement("span");
+  testLabel.textContent = "Test URL";
+  const testInputs = document.createElement("div");
+  testInputs.className = "provider-test-inputs";
+  const testUrlInput = document.createElement("input");
+  testUrlInput.type = "text";
+  testUrlInput.className = "provider-test-url";
+  testUrlInput.placeholder = "https://www.google.com/search?q=filetype:pdf";
+  testUrlInput.spellcheck = false;
+  const useTabBtn = document.createElement("button");
+  useTabBtn.type = "button";
+  useTabBtn.className = "chrome provider-use-tab";
+  useTabBtn.textContent = "Use active tab";
+  useTabBtn.addEventListener("click", async () => {
+    const tabUrl = await getActiveTabUrl();
+    if (!tabUrl || tabUrl.startsWith("chrome://") || tabUrl.startsWith("chrome-extension://")) {
+      runProviderTest(box, "");
+      const detail = box.querySelector(".provider-test-detail");
+      if (detail) {
+        detail.textContent = "";
+        const line = document.createElement("span");
+        line.className = "summary fail";
+        line.textContent = t("providerTestTabUnavailable");
+        detail.appendChild(line);
+      }
+      return;
+    }
+    runProviderTest(box, tabUrl);
+  });
+  testInputs.append(testUrlInput, useTabBtn);
+  testField.append(testLabel, testInputs);
+
+  const testHint = document.createElement("div");
+  testHint.className = "hint provider-test-hint";
+  testHint.textContent = "Paste a search results URL or use the tab you have open. Test checks the same host/path rules used for collection.";
+
+  const actions = document.createElement("div");
+  actions.className = "provider-actions";
   const testBtn = document.createElement("button");
   testBtn.className = "chrome provider-test";
   testBtn.type = "button";
-  testBtn.textContent = "Test";
-  const testStatus = document.createElement("span");
-  testStatus.className = "status provider-test-status";
-  testBtn.addEventListener("click", () => {
-    const current = {
-      hostContains: box.querySelector(".provider-host").value.trim().toLowerCase(),
-      pathContains: box.querySelector(".provider-path").value.trim(),
-      queryParam: box.querySelector(".provider-query").value.trim() || "q",
-    };
-    const result = providerMatchesTestUrl(current, box.querySelector(".provider-test-url").value.trim());
-    testStatus.textContent = result.ok ? t("providerTestMatched") : t("providerTestFailed");
-    testStatus.style.color = result.ok ? "var(--blue)" : "var(--danger)";
-  });
+  testBtn.textContent = "Test rules";
+  testBtn.addEventListener("click", () => runProviderTest(box));
   const removeBtn = document.createElement("button");
   removeBtn.className = "chrome danger provider-remove";
   removeBtn.type = "button";
@@ -249,8 +370,11 @@ function providerTemplate(provider, index) {
     providers.splice(index, 1);
     renderProviders();
   });
-  removeWrap.append(testBtn, removeBtn, testStatus);
-  controls.append(grid, removeWrap);
+  const testDetail = document.createElement("div");
+  testDetail.className = "provider-test-detail";
+  actions.append(testBtn, removeBtn, testDetail);
+
+  controls.append(grid, testField, testHint, actions);
   box.append(summary, controls);
   return box;
 }
@@ -452,13 +576,20 @@ function localizeOptions() {
       "provider-path": "pathContains",
       "provider-query": "queryParam",
       "provider-next": "nextSelector",
-      "provider-test-url": "testUrl",
     };
     const key = Object.keys(map).find((cls) => input?.classList.contains(cls));
     if (key) span.textContent = t(map[key]);
   });
+  document.querySelectorAll(".provider-test-field > span").forEach((span) => {
+    span.textContent = t("testUrl");
+  });
   document.querySelectorAll(".provider-remove").forEach((btn) => { btn.textContent = t("remove"); });
   document.querySelectorAll(".provider-test").forEach((btn) => { btn.textContent = t("testProvider"); });
+  document.querySelectorAll(".provider-use-tab").forEach((btn) => { btn.textContent = t("useActiveTab"); });
+  document.querySelectorAll(".provider-test-hint").forEach((el) => { el.textContent = t("testUrlHint"); });
+  document.querySelectorAll(".provider-test-url").forEach((input) => {
+    input.placeholder = t("testUrlPlaceholder");
+  });
   $("addProvider").textContent = t("addProvider");
   $("clearValidationCache").textContent = t("clearValidationCache");
   $("save").textContent = t("save");

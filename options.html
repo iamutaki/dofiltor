@@ -144,6 +144,29 @@
       color: #f28b82; border-color: #5c2b29; background: #3c1f1e;
     }
     .provider-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .provider-test-field { grid-column: 1 / -1; }
+    .provider-test-inputs {
+      display: flex; gap: 8px; align-items: stretch;
+    }
+    .provider-test-inputs .provider-test-url { flex: 1; min-width: 0; }
+    .provider-test-hint {
+      grid-column: 1 / -1; font-size: 11px; color: var(--subtle); margin: -4px 0 0;
+    }
+    .provider-test-detail {
+      flex: 1 1 100%; font-size: 11px; line-height: 1.45; color: var(--subtle);
+    }
+    .provider-test-detail .rule { display: block; }
+    .provider-test-detail .rule.pass { color: #137333; }
+    .provider-test-detail .rule.fail { color: var(--danger); }
+    .provider-test-detail .rule.warn { color: #b06000; }
+    .provider-test-detail .summary { display: block; margin-top: 4px; font-weight: 500; }
+    .provider-test-detail .summary.pass { color: var(--blue); }
+    .provider-test-detail .summary.fail { color: var(--danger); }
+    [data-theme="dark"] .provider-test-detail .rule.pass { color: #81c995; }
+    [data-theme="dark"] .provider-test-detail .rule.warn { color: #fdd663; }
+    .provider-actions {
+      margin-top: 8px; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px;
+    }
     .field span {
       display: block; color: var(--subtle); font-size: 12px; margin-bottom: 4px;
     }
