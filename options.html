@@ -307,7 +307,18 @@
       </div>
 
       <div class="card">
-        <div class="card-title" data-i18n="historyCacheTitle">History &amp; validation cache</div>
+        <div class="card-title" data-i18n="scanHistoryTitle">Scan history</div>
+        <div class="row">
+          <div>
+            <div class="label" data-i18n="dorkHistoryMax">Dork query history limit</div>
+            <div class="hint" data-i18n="dorkHistoryMaxHint">Saved dork queries for the popup history list and duplicate-dork warnings.</div>
+          </div>
+          <input type="number" id="dorkHistoryMax" min="10" max="2000" step="10" value="200">
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title" data-i18n="validationCacheTitle">Validation cache</div>
         <div class="row">
           <div>
             <div class="label" data-i18n="reuseValidationCache">Reuse validation cache</div>
@@ -329,13 +340,6 @@
           </div>
           <input type="number" id="urlCacheMaxAgeDays" min="0" max="3650" step="1" value="0">
         </div>
-        <div class="row">
-          <div>
-            <div class="label" data-i18n="dorkHistoryMax">Dork query history limit</div>
-            <div class="hint" data-i18n="dorkHistoryMaxHint">Maximum saved dork queries in scan history (popup).</div>
-          </div>
-          <input type="number" id="dorkHistoryMax" min="10" max="2000" step="10" value="200">
-        </div>
         <div class="actions">
           <button class="chrome danger" id="clearValidationCache" type="button" data-i18n="clearValidationCache">Clear validation cache</button>
           <span class="status" id="cacheStatus"></span>
@@ -350,6 +354,10 @@
             <div class="hint">One extension per line or comma-separated.</div>
           </div>
           <textarea id="fileTypes" spellcheck="false"></textarea>
+        </div>
+        <div class="actions">
+          <button class="chrome" id="mergeDefaultExtensions" type="button" data-i18n="mergeDefaultExtensions">Merge default extensions</button>
+          <span class="status" id="mergeStatus"></span>
         </div>
       </div>
 

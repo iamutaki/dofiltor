@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Toolbar badge stays in sync whenever the URL list changes (`saveUrls` in the background; popup uses `SET_URLS` / `CLEAR_ALL`).
+- Confirmation dialogs for **Clear all**, scan history clear, and clearing the validation cache in Settings.
+- Settings: separate **Scan history** and **Validation cache** cards; validation cache reuse is **off** by default for new installs.
+- Settings: **Merge default extensions** adds newly shipped file types without a full reset.
+- **Clear all** runs through `CLEAR_ALL` in the background (clears storage, badge, and pending auto-validate queue).
 - Fix toolbar icon badge not clearing after **Clear all** (badge now resets to empty with the URL list).
 - Warn when the current tab's dork query was already captured before (scope bar in popup + optional notification on the search page).
 - Show a **Checking** state on rows while URL validation is in progress (manual validate and auto-validate).

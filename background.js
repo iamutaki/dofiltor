@@ -30,7 +30,7 @@ const DEFAULT_SETTINGS = {
   enabled: true,
   fileTypes: DEFAULT_FILE_TYPES,
   providers: DEFAULT_PROVIDERS,
-  reuseValidationCache: true,
+  reuseValidationCache: false,
   urlCacheMaxEntries: 5000,
   urlCacheMaxAgeDays: 0,
   dorkHistoryMax: 200,
@@ -50,9 +50,24 @@ function getUrls() {
   });
 }
 
-function saveUrls(urls) {
+function syncActionBadge(count) {
+  const n = Math.max(0, Number(count) || 0);
+  const text = n > 0 ? String(n) : "";
   return new Promise((resolve) => {
-    chrome.storage.local.set({ [STORAGE_KEY]: dedupeUrls(urls) }, resolve);
+    chrome.action.setBadgeText({ text }, () => {
+      if (chrome.runtime?.lastError) { /* ignore */ }
+      if (n > 0) chrome.action.setBadgeBackgroundColor({ color: "#2563eb" });
+      resolve();
+    });
+  });
+}
+
+function saveUrls(urls) {
+  const clean = dedupeUrls(urls);
+  return new Promise((resolve) => {
+    chrome.storage.local.set({ [STORAGE_KEY]: clean }, () => {
+      syncActionBadge(clean.length).then(() => resolve(clean));
+    });
   });
 }
 
@@ -544,9 +559,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       if (!stg.enabled) { sendResponse({ added: 0, total: 0, new_urls: [] }); return; }
       addUrls(msg.urls).then((result) => {
       if (result.added > 0) {
-        chrome.action.setBadgeText({ text: String(result.total) });
-        chrome.action.setBadgeBackgroundColor({ color: "#2563eb" });
-
         // Desktop notification for new URLs
         const query = msg.urls[0]?.query || "";
         const provider = msg.urls[0]?.provider || "";
@@ -576,10 +588,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 
   if (msg.type === "SET_URLS") {
-    saveUrls(msg.urls).then(() => {
-      chrome.action.setBadgeText({ text: msg.urls.length > 0 ? String(msg.urls.length) : "" });
-      sendResponse({ ok: true });
-    });
+    saveUrls(msg.urls || []).then((clean) => sendResponse({ ok: true, count: clean.length }));
     return true;
   }
 
@@ -656,10 +665,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 
   if (msg.type === "CLEAR_ALL") {
-    saveUrls([]).then(() => {
-      chrome.action.setBadgeText({ text: "" });
-      sendResponse({ ok: true });
-    });
+    autoValidateQueue = [];
+    autoValidateBusy = false;
+    saveUrls([]).then(() => sendResponse({ ok: true, count: 0 }));
     return true;
   }
 

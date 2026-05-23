@@ -11,7 +11,7 @@ const DEFAULT_SETTINGS = {
   validateMode: "head-get",
   notifications: true,
   enabled: true,
-  reuseValidationCache: true,
+  reuseValidationCache: false,
   urlCacheMaxEntries: 5000,
   urlCacheMaxAgeDays: 0,
   dorkHistoryMax: 200,
@@ -139,20 +139,8 @@ function sendMessage(msg) {
   });
 }
 
-function syncActionBadge(count) {
-  const n = Math.max(0, Number(count) || 0);
-  if (typeof chrome !== "undefined" && chrome.action?.setBadgeText) {
-    return new Promise((resolve) => {
-      chrome.action.setBadgeText({ text: n > 0 ? String(n) : "" }, () => {
-        if (chrome.runtime?.lastError) { /* ignore */ }
-        if (n > 0 && chrome.action?.setBadgeBackgroundColor) {
-          chrome.action.setBadgeBackgroundColor({ color: "#2563eb" });
-        }
-        resolve();
-      });
-    });
-  }
-  return sendMessage({ type: "UPDATE_BADGE", count: n });
+function confirmAction(message) {
+  return window.confirm(message);
 }
 
 function loadTheme() { return localStorage.getItem("dofiltor_theme") || "auto"; }
@@ -178,8 +166,9 @@ function loadUrls() {
   }));
 }
 function saveUrls(urls) {
-  if (!hasChromeStorage()) return Promise.resolve();
-  return new Promise((r) => chrome.storage.local.set({ [STORAGE_KEY]: dedupeUrls(Array.isArray(urls) ? urls : []) }, r));
+  const next = dedupeUrls(Array.isArray(urls) ? urls : []);
+  if (!hasChromeStorage()) return Promise.resolve(next);
+  return sendMessage({ type: "SET_URLS", urls: next }).then(() => next);
 }
 function loadSettings() {
   if (!hasChromeStorage()) return Promise.resolve({ ...DEFAULT_SETTINGS });
@@ -991,17 +980,16 @@ async function removeDead() {
 }
 async function clearAll() {
   if (!allUrls.length) return;
+  if (!confirmAction(t("confirmClearAll", { n: allUrls.length }))) return;
   const previous = allUrls.slice();
   const previousSelection = new Set(selectedUrls);
+  await sendMessage({ type: "CLEAR_ALL" });
   allUrls = [];
   selectedUrls.clear();
-  await saveUrls(allUrls);
-  await syncActionBadge(0);
-  showUndo("Cleared " + previous.length + " URLs", async () => {
+  showUndo(t("statusCleared", { count: previous.length }), async () => {
     allUrls = previous;
     selectedUrls = previousSelection;
     await saveUrls(allUrls);
-    await syncActionBadge(allUrls.length);
     refresh();
   });
   refresh();
@@ -1058,7 +1046,12 @@ function showHistory() {
     const clearBtn = document.createElement("button");
     clearBtn.type = "button";
     clearBtn.textContent = "Clear";
-    clearBtn.addEventListener("click", () => sendMessage({ type: "CLEAR_HISTORY" }).then(() => { setStatus("History cleared"); refresh(); }));
+    clearBtn.addEventListener("click", async () => {
+      if (!confirmAction(t("confirmClearHistory"))) return;
+      await sendMessage({ type: "CLEAR_HISTORY" });
+      setStatus("History cleared");
+      refresh();
+    });
     header.appendChild(clearBtn);
     box.appendChild(header);
 
@@ -1418,7 +1411,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     $("autoValidate").checked = !!settings.autoValidate;
     $("notifications").checked = !!settings.notifications;
     if ($("reuseValidationCache")) {
-      $("reuseValidationCache").checked = settings.reuseValidationCache !== false;
+      $("reuseValidationCache").checked = settings.reuseValidationCache === true;
     }
     updateAutoNextUI(autoNextEnabled, null);
     refresh();

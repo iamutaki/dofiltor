@@ -18,7 +18,7 @@ const DEFAULT_SETTINGS = {
   validateDelay: 1500,
   validateMode: "head-get",
   notifications: true,
-  reuseValidationCache: true,
+  reuseValidationCache: false,
   urlCacheMaxEntries: 5000,
   urlCacheMaxAgeDays: 0,
   dorkHistoryMax: 200,
@@ -490,9 +490,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     localizeOptions();
   });
   $("clearValidationCache").addEventListener("click", async () => {
+    if (!window.confirm(t("confirmClearValidationCache"))) return;
     await sendRuntimeMessage({ type: "CLEAR_VALIDATION_CACHE" });
     $("cacheStatus").textContent = t("validationCacheCleared");
     setTimeout(() => { $("cacheStatus").textContent = ""; }, 1800);
+  });
+  $("mergeDefaultExtensions").addEventListener("click", () => {
+    const current = normalizeFileTypes($("fileTypes").value);
+    const merged = mergeFileTypes(current, DEFAULT_FILE_TYPES);
+    $("fileTypes").value = merged.join("\n");
+    const added = merged.length - current.length;
+    $("mergeStatus").textContent = added > 0 ? t("fileTypesMerged", { n: added }) : t("fileTypesMergeNone");
+    setTimeout(() => { $("mergeStatus").textContent = ""; }, 2500);
   });
 
   settings = await loadSettings();
@@ -505,7 +514,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("validateDelay").value = settings.validateDelay;
   $("validateMode").value = settings.validateMode || DEFAULT_SETTINGS.validateMode;
   $("notifications").checked = !!settings.notifications;
-  $("reuseValidationCache").checked = settings.reuseValidationCache !== false;
+  $("reuseValidationCache").checked = settings.reuseValidationCache === true;
   $("urlCacheMaxEntries").value = settings.urlCacheMaxEntries ?? DEFAULT_SETTINGS.urlCacheMaxEntries;
   $("urlCacheMaxAgeDays").value = settings.urlCacheMaxAgeDays ?? DEFAULT_SETTINGS.urlCacheMaxAgeDays;
   $("dorkHistoryMax").value = settings.dorkHistoryMax ?? DEFAULT_SETTINGS.dorkHistoryMax;
@@ -527,17 +536,19 @@ function localizeOptions() {
   const titles = document.querySelectorAll(".card-title");
   if (titles[0]) titles[0].textContent = t("appearance");
   if (titles[1]) titles[1].textContent = t("automation");
-  if (titles[2]) titles[2].textContent = t("historyCacheTitle");
-  if (titles[3]) titles[3].textContent = t("capture");
-  if (titles[4]) titles[4].textContent = t("providers");
-  if (titles[5]) titles[5].textContent = t("about");
-  if (titles[6]) titles[6].textContent = t("releaseReadiness");
+  if (titles[2]) titles[2].textContent = t("scanHistoryTitle");
+  if (titles[3]) titles[3].textContent = t("validationCacheTitle");
+  if (titles[4]) titles[4].textContent = t("capture");
+  if (titles[5]) titles[5].textContent = t("providers");
+  if (titles[6]) titles[6].textContent = t("about");
+  if (titles[7]) titles[7].textContent = t("releaseReadiness");
 
   const labels = document.querySelectorAll(".label");
   const labelKeys = [
     "theme", "language", "autoNext", "maxPages", "pageDelay", "autoValidate",
     "validationDelay", "validationMode", "notifications",
-    "reuseValidationCache", "urlCacheMaxEntries", "urlCacheMaxAgeDays", "dorkHistoryMax",
+    "dorkHistoryMax",
+    "reuseValidationCache", "urlCacheMaxEntries", "urlCacheMaxAgeDays",
     "fileExtensions",
   ];
   labels.forEach((label, index) => {
@@ -548,7 +559,8 @@ function localizeOptions() {
   const hintKeys = [
     "themeHint", "languageHint", "autoNextHint", "maxPagesHint", "pageDelayHint",
     "autoValidateHint", "validationDelayHint", "validationModeHint", "notificationsHint",
-    "reuseValidationCacheHint", "urlCacheMaxEntriesHint", "urlCacheMaxAgeDaysHint", "dorkHistoryMaxHint",
+    "dorkHistoryMaxHint",
+    "reuseValidationCacheHint", "urlCacheMaxEntriesHint", "urlCacheMaxAgeDaysHint",
     "fileExtensionsHint",
   ];
   hints.forEach((hint, index) => {
@@ -592,6 +604,7 @@ function localizeOptions() {
   });
   $("addProvider").textContent = t("addProvider");
   $("clearValidationCache").textContent = t("clearValidationCache");
+  if ($("mergeDefaultExtensions")) $("mergeDefaultExtensions").textContent = t("mergeDefaultExtensions");
   $("save").textContent = t("save");
   $("reset").textContent = t("resetDefaults");
 
