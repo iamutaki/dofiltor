@@ -193,7 +193,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("fileTypes").value = settings.fileTypes.join("\n");
   $("version").textContent = typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.getManifest
     ? chrome.runtime.getManifest().version
-    : "3.4.6";
+    : "3.4.8";
   renderProviders();
   localizeOptions();
   setTab(location.hash.startsWith("#about") ? "about" : "settings");
@@ -252,6 +252,6 @@ function localizeOptions() {
   $("reset").textContent = t("resetDefaults");
 
   const aboutRows = document.querySelectorAll(".about-label");
-  const aboutKeys = ["name", "description", "version", "repository"];
+  const aboutKeys = ["name", "description", "version", "repository", "privacyPolicy"];
   aboutRows.forEach((row, index) => { row.textContent = t(aboutKeys[index]); });
 }

@@ -46,6 +46,7 @@ const I18N_MESSAGES = {
     description: "Description",
     version: "Version",
     repository: "Repository",
+    privacyPolicy: "Privacy Policy",
 
     // Popup - header
     appName: "Dofiltor",
@@ -209,6 +210,7 @@ const I18N_MESSAGES = {
     description: "Deskripsi",
     version: "Versi",
     repository: "Repositori",
+    privacyPolicy: "Kebijakan Privasi",
 
     // Popup - header
     appName: "Dofiltor",

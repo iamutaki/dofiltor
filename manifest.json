@@ -2,15 +2,14 @@
   "manifest_version": 3,
   "name": "__MSG_extensionName__",
   "description": "__MSG_extensionDescription__",
-  "version": "3.4.6",
+  "version": "3.4.8",
   "default_locale": "en",
   "permissions": [
     "storage",
     "activeTab",
     "downloads",
     "tabs",
-    "notifications",
-    "scripting"
+    "notifications"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -27,7 +26,16 @@
   "content_scripts": [
     {
       "matches": [
-        "<all_urls>"
+        "https://www.google.com/search*",
+        "https://www.google.co.id/search*",
+        "https://www.bing.com/search*",
+        "https://duckduckgo.com/*",
+        "https://www.duckduckgo.com/*",
+        "https://search.yahoo.com/search*",
+        "https://yandex.com/search*",
+        "https://www.yandex.com/search*",
+        "https://yandex.ru/search*",
+        "https://www.yandex.ru/search*"
       ],
       "js": [
         "content.js"

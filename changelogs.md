@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Added a release-ready privacy policy draft and linked it from the About page.
+- Removed the unused `scripting` permission from the extension manifest.
+- Replaced the global `<all_urls>` content script match with explicit built-in provider hosts.
+- Reduced default DOM observer scope to supported search/dork result providers.
+
 ## 3.4.6
 
 - Show extension version (`vX.Y.Z`) next to the app name in the popup header.
