@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Removed the unused `activeTab` permission from the extension manifest.
 - Added a release-ready privacy policy draft and linked it from the About page.
 - Removed the unused `scripting` permission from the extension manifest.
 - Replaced the global `<all_urls>` content script match with explicit built-in provider hosts.

@@ -42,7 +42,7 @@ When the user validates URLs or downloads files, the browser may make requests d
 Dofiltor requests browser permissions only to support its core features:
 
 - `storage` is used to save local settings, collected URLs, and history.
-- `activeTab` and `tabs` are used to detect and interact with the active supported provider tab.
+- `tabs` is used to open extension pages and focus supported provider tabs from the popup.
 - `downloads` is used when the user starts file downloads.
 - `notifications` is used for optional collection, CAPTCHA, and completion notifications.
 
