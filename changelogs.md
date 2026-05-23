@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Unit tests for `migrateFileTypes`, `normalizeDorkQuery`, and `lookupDorkCaptureFromData` (`npm test`).
+- Five-minute release smoke checklist in `docs/release-checklist.md`.
+- Content script debug logs gated behind `localStorage.dofiltor_debug = "1"` (`dlog()`); warnings unchanged.
+- CI reads `manifest.json` version for artifact naming and verifies release tags match the manifest.
+- Shared `dork-utils.js` for dork normalization and capture lookup (background, popup, content).
 - Toolbar badge stays in sync whenever the URL list changes (`saveUrls` in the background; popup uses `SET_URLS` / `CLEAR_ALL`).
 - Confirmation dialogs for **Clear all**, scan history clear, and clearing the validation cache in Settings.
 - Settings: separate **Scan history** and **Validation cache** cards; validation cache reuse is **off** by default for new installs.

@@ -31,6 +31,18 @@ let nextTimer = null;
 let justResolvedCaptcha = false;
 let contextDead = false;
 
+function isDfcDebug() {
+  try {
+    return localStorage.getItem("dofiltor_debug") === "1";
+  } catch (e) {
+    return false;
+  }
+}
+
+function dlog(...args) {
+  if (isDfcDebug()) console.log("[Dork File Collector]", ...args);
+}
+
 // --- Safe messaging ---
 
 function sendMsg(msg, callback) {
@@ -59,7 +71,7 @@ function shutdown() {
   // Stop observers
   try { urlObserver.disconnect(); } catch (e) { /* ignore */ }
   try { domObserver.disconnect(); } catch (e) { /* ignore */ }
-  console.log("[Dork File Collector] Context invalidated — content script stopped. Reload the page to activate again.");
+  dlog("Context invalidated — content script stopped. Reload the page to activate again.");
 }
 
 // --- Settings ---
@@ -92,12 +104,12 @@ try {
       docPattern = buildDocPattern(settings.fileTypes);
 
       if (!wasAutoNext && settings.autoNext) {
-        console.log("[Dork File Collector] Auto-next enabled — starting");
+        dlog("Auto-next enabled — starting");
         scheduleAutoNext(1000);
       }
 
       if (wasAutoNext && !settings.autoNext) {
-        console.log("[Dork File Collector] Auto-next disabled");
+        dlog("Auto-next disabled");
         clearTimeout(nextTimer);
         autoNextActive = false;
         sendMsg({
@@ -109,7 +121,7 @@ try {
       }
 
       if (wasEnabled === false && settings.enabled === true) {
-        console.log("[Dork File Collector] Extension re-enabled — rescanning page");
+        dlog("Extension re-enabled — rescanning page");
         scan();
         if (settings.autoNext && !captchaDetected) {
           scheduleAutoNext(settings.pageDelay);
@@ -180,10 +192,6 @@ function getQueryFromUrl() {
   const params = new URLSearchParams(window.location.search);
   const provider = getActiveProvider();
   return params.get(provider?.queryParam || "q") || "";
-}
-
-function normalizeDorkQuery(query) {
-  return String(query || "").trim().replace(/\s+/g, " ");
 }
 
 let lastWarnedDork = "";
@@ -321,7 +329,7 @@ function scan() {
     captchaDetected = false;
     justResolvedCaptcha = true;
     sendMsg({ type: "CAPTCHA_STATUS", status: "resolved" });
-    console.log("[Dork File Collector] CAPTCHA resolved — resuming with longer delay");
+    dlog("CAPTCHA resolved — resuming with longer delay");
   }
 
   const newUrls = extractUrls();
@@ -347,7 +355,7 @@ function scan() {
           page: getPageNumber(),
           message: "End of results — no more pages",
         });
-        console.log("[Dork File Collector] End of results reached at page " + getPageNumber());
+        dlog("End of results reached at page " + getPageNumber());
       }
       return;
     }
@@ -412,7 +420,7 @@ function scheduleAutoNext(delay) {
 
   nextTimer = setTimeout(() => {
     if (contextDead || !settings.autoNext || captchaDetected) return;
-    console.log("[Dork File Collector] Clicking next — page " + page + " \u2192 " + (page + 1));
+    dlog("Clicking next — page " + page + " \u2192 " + (page + 1));
     nextBtn.click();
   }, delay);
 }

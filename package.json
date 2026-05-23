@@ -1,0 +1,9 @@
+{
+  "name": "dofiltor",
+  "private": true,
+  "description": "Dofiltor browser extension — dev scripts only",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "check:locales": "node scripts/check-locales.mjs"
+  }
+}

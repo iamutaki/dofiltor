@@ -6,7 +6,7 @@ const HISTORY_KEY = "dofiltor_history";
 const GLOBAL_STATS_KEY = "dofiltor_global_stats";
 const VALIDATION_CACHE_KEY = "dofiltor_validation_cache";
 const CSV_COLUMNS = ["url", "file_type", "query", "source_page", "discovered_at", "size"];
-importScripts("file-types.js");
+importScripts("file-types.js", "dork-utils.js");
 const DEFAULT_PROVIDERS = [
   { id: "google", name: "Google", enabled: true, hostContains: "google.", pathContains: "/search", queryParam: "q", nextSelector: "#pnnext" },
   { id: "bing", name: "Bing", enabled: true, hostContains: "bing.com", pathContains: "/search", queryParam: "q", nextSelector: "a.sb_pagN" },
@@ -396,34 +396,9 @@ function addHistoryEntry(query, urlCount, meta) {
   }));
 }
 
-function normalizeDorkQuery(query) {
-  return String(query || "").trim().replace(/\s+/g, " ");
-}
-
-function dorkQueriesMatch(a, b) {
-  const left = normalizeDorkQuery(a).toLowerCase();
-  const right = normalizeDorkQuery(b).toLowerCase();
-  return !!left && left === right;
-}
-
 function lookupDorkCapture(query) {
-  const normalized = normalizeDorkQuery(query);
-  if (!normalized) {
-    return Promise.resolve({ captured: false, query: "", urlCount: 0, pages: 0, lastScan: null, provider: null });
-  }
-  return Promise.all([getHistory(), getUrls()]).then(([history, urls]) => {
-    const hist = history.find((h) => dorkQueriesMatch(h.query, normalized));
-    const urlCount = urls.filter((u) => dorkQueriesMatch(u.query, normalized)).length;
-    const captured = !!(hist || urlCount > 0);
-    return {
-      captured,
-      query: normalized,
-      urlCount: Math.max(urlCount, hist?.urls || 0),
-      pages: hist?.pages || 0,
-      lastScan: hist?.lastScan || null,
-      provider: hist?.provider || null,
-    };
-  });
+  return Promise.all([getHistory(), getUrls()]).then(([history, urls]) =>
+    lookupDorkCaptureFromData(query, history, urls));
 }
 
 // --- Settings ---

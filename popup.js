@@ -258,9 +258,6 @@ function providerMatchesUrl(provider, url) {
     return false;
   }
 }
-function normalizeDorkQuery(query) {
-  return String(query || "").trim().replace(/\s+/g, " ");
-}
 function getDorkQueryFromUrl(url, provider) {
   if (!url || !provider) return "";
   try {
