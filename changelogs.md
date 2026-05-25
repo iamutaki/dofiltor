@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Fix** — CAPTCHA side-panel banner now hides when the challenge clears (storage removal / `CAPTCHA_RESOLVED`); resume countdown still shows the blue banner, then dismisses when finished.
+- **Fix** — Capture URLs without a file extension when the search engine shows a type chip (e.g. Google `PDF` badge on `/url?q=` links); shared helpers in `file-types.js`.
 - **Fix** — Background no longer logs `Could not establish connection` when the side panel is closed (runtime broadcasts use a safe helper with callback + promise catch).
 - **Manual grab** — Side panel **Grab** button collects all file links on the current search page, ignoring skip-visited / session-collected / panel-known rules (URLs already in the list are not duplicated).
 - **Mark page done** — Side panel button marks every result link on the current search page as visited (purple styling), same visual state as after auto-next, without advancing pagination.

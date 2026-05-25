@@ -1643,13 +1643,23 @@ function captchaResumeLabel(secondsLeft) {
   return t("captchaResumeIn").replace("{seconds}", String(secondsLeft));
 }
 
+function dismissCaptchaBanner() {
+  const banner = $("captchaBanner");
+  if (!banner) return;
+  banner.classList.remove("show", "countdown");
+}
+
+function isCaptchaCountdownActive(countdown) {
+  return !!(countdown && countdown.secondsLeft > 0);
+}
+
 function handleCaptchaCountdown(msg) {
   const banner = $("captchaBanner");
   const text = $("captchaBannerText");
   if (!banner || !text) return;
 
   if (!msg || msg.done || (msg.secondsLeft != null && msg.secondsLeft <= 0)) {
-    banner.classList.remove("show", "countdown");
+    dismissCaptchaBanner();
     return;
   }
 
@@ -1673,20 +1683,23 @@ function handleCaptchaAlert(payload) {
     hideDoneBanner();
     return;
   }
-  // Resolved: countdown UI takes over; do not hide banner here.
+  dismissCaptchaBanner();
 }
 
 async function updateCaptchaBanner() {
   const status = await sendMessage({ type: "GET_CAPTCHA_STATUS" });
-  if (status && status.active) handleCaptchaAlert(status);
+  if (status && status.active) {
+    handleCaptchaAlert(status);
+    return;
+  }
 
-  if (!hasChromeStorage()) return;
-  chrome.storage.local.get(CAPTCHA_COUNTDOWN_KEY, (res) => {
-    const countdown = res && res[CAPTCHA_COUNTDOWN_KEY];
-    if (countdown && countdown.secondsLeft > 0) {
-      handleCaptchaCountdown({ secondsLeft: countdown.secondsLeft, done: false });
-    }
-  });
+  const countdown = await sendMessage({ type: "GET_CAPTCHA_COUNTDOWN" });
+  if (isCaptchaCountdownActive(countdown)) {
+    handleCaptchaCountdown({ secondsLeft: countdown.secondsLeft, done: false });
+    return;
+  }
+
+  dismissCaptchaBanner();
 }
 
 async function updateCaptchaCountdown() {
@@ -1894,7 +1907,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
       if (changes[CAPTCHA_ALERT_KEY]) {
         const val = changes[CAPTCHA_ALERT_KEY].newValue;
-        if (val && val.active) handleCaptchaAlert(val);
+        if (val && val.active) {
+          handleCaptchaAlert(val);
+        } else {
+          handleCaptchaAlert({ active: false });
+        }
       }
       if (changes[CAPTCHA_COUNTDOWN_KEY]) {
         const val = changes[CAPTCHA_COUNTDOWN_KEY].newValue;
@@ -1918,7 +1935,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (!msg) return;
       if (msg.type === "AUTO_NEXT_DONE") handleAutoNextDone(msg);
       if (msg.type === "CAPTCHA_DETECTED") handleCaptchaAlert(msg);
-      if (msg.type === "CAPTCHA_RESOLVED") { /* countdown banner follows */ }
+      if (msg.type === "CAPTCHA_RESOLVED") handleCaptchaAlert({ active: false });
       if (msg.type === "CAPTCHA_COUNTDOWN") handleCaptchaCountdown(msg);
       if (msg.type === "BULK_DORK_STATUS") handleBulkDorkStatus(msg);
       if (msg.type === "ACTIVITY_LOG_UPDATED") renderActivityLog(msg.log || []);

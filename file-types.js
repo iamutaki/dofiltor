@@ -116,3 +116,51 @@ function fileIconClass(ext) {
   if (["zip", "rar", "7z", "tar", "gz"].includes(key)) return "ext-archive";
   return "";
 }
+
+/** Provider SERP chips (e.g. Google "PDF" badge) → normalized extension. */
+const PROVIDER_BADGE_ALIASES = {
+  pdf: "pdf",
+  doc: "doc",
+  docx: "docx",
+  docm: "docm",
+  xls: "xls",
+  xlsx: "xlsx",
+  xlsm: "xlsm",
+  ppt: "ppt",
+  pptx: "pptx",
+  pptm: "pptm",
+  csv: "csv",
+  txt: "txt",
+  rtf: "rtf",
+  odt: "odt",
+  ods: "ods",
+  odp: "odp",
+};
+
+function buildExtensionPattern(fileTypes) {
+  const safe = normalizeFileTypeList(fileTypes)
+    .map((ext) => ext.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const joined = safe.length ? safe.join("|") : DEFAULT_FILE_TYPES.join("|");
+  return new RegExp("\\.(" + joined + ")\\b", "i");
+}
+
+function fileTypeFromUrlPath(url, fileTypes) {
+  if (!url) return null;
+  const path = String(url).split("?")[0].split("#")[0];
+  const match = buildExtensionPattern(fileTypes).exec(path);
+  return match ? match[1].toLowerCase() : null;
+}
+
+function fileTypeFromBadgeLabel(label, fileTypes) {
+  const raw = String(label || "").trim();
+  if (!raw) return null;
+  const key = raw.replace(/^\./, "").toLowerCase();
+  const allowed = new Set(normalizeFileTypeList(fileTypes));
+  const mapped = PROVIDER_BADGE_ALIASES[key] || key;
+  if (allowed.has(mapped)) return mapped;
+  return null;
+}
+
+function resolveCaptureFileType(url, badgeLabel, fileTypes) {
+  return fileTypeFromUrlPath(url, fileTypes) || fileTypeFromBadgeLabel(badgeLabel, fileTypes);
+}

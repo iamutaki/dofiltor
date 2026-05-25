@@ -27,7 +27,6 @@ let settings = {
   fileTypes: DEFAULT_FILE_TYPES,
   providers: DEFAULT_PROVIDERS,
 };
-let docPattern = buildDocPattern(settings.fileTypes);
 let captchaDetected = false;
 let autoNextActive = false;
 let nextTimer = null;
@@ -96,7 +95,6 @@ function loadSettings() {
         if (chrome.runtime.lastError) { r(settings); return; }
         if (res[SETTINGS_KEY]) {
           settings = normalizeSettings({ ...settings, ...res[SETTINGS_KEY] });
-          docPattern = buildDocPattern(settings.fileTypes);
         }
         r(settings);
       });
@@ -117,7 +115,6 @@ try {
       const wasAutoNext = settings.autoNext;
       const wasEnabled = settings.enabled;
       settings = normalizeSettings({ ...settings, ...changes[SETTINGS_KEY].newValue });
-      docPattern = buildDocPattern(settings.fileTypes);
 
       if (!wasAutoNext && settings.autoNext) {
         dlog("Auto-next enabled — starting");
@@ -304,14 +301,6 @@ function hasExplicitEndOfResults() {
     bodyText.includes("tidak ada hasil");
 }
 
-function buildDocPattern(fileTypes) {
-  const safe = fileTypes
-    .map((ext) => String(ext).trim().replace(/^\./, "").toLowerCase())
-    .filter(Boolean)
-    .map((ext) => ext.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-  return new RegExp("\\.(" + (safe.length ? safe.join("|") : DEFAULT_FILE_TYPES.join("|")) + ")\\b", "i");
-}
-
 function getActiveProvider() {
   const host = window.location.hostname.toLowerCase();
   const path = window.location.pathname.toLowerCase();
@@ -336,15 +325,72 @@ function isProviderUrl(url) {
   }
 }
 
-function isDocumentUrl(url) {
-  const path = url.split("?")[0].split("#")[0];
-  return docPattern.test(path);
+const RESULT_ITEM_BY_PROVIDER = {
+  google: ".g, .MjjYud, [data-sokoban-container], li[data-rpos]",
+  bing: ".b_algo, li.b_algo",
+  duckduckgo: ".result, article.result, [data-testid='result']",
+  yahoo: ".algo, .dd",
+  yandex: ".Organic, .serp-item",
+};
+
+const GOOGLE_FILE_BADGE_SELECTORS = [
+  ".eFM0qc span",
+  ".BCF2pd span",
+  ".ZGwO7 span",
+  ".s4H5Cf span",
+];
+
+function findResultItemRoot(link, providerId) {
+  const selectors = RESULT_ITEM_BY_PROVIDER[providerId];
+  if (!link || !selectors) return null;
+  for (const sel of selectors.split(",")) {
+    const trimmed = sel.trim();
+    if (!trimmed) continue;
+    const el = link.closest(trimmed);
+    if (el) return el;
+  }
+  return null;
 }
 
-function extractFileType(url) {
-  const path = url.split("?")[0].split("#")[0];
-  const match = path.match(docPattern);
-  return match ? match[1].toLowerCase() : "unknown";
+function scanResultItemForBadgeLabel(root, fileTypes) {
+  if (!root) return null;
+  for (const span of root.querySelectorAll("span")) {
+    const label = (span.textContent || "").trim();
+    if (label.length > 8 || label.length < 2) continue;
+    if (!/^[A-Za-z][A-Za-z0-9]{0,6}$/.test(label)) continue;
+    if (fileTypeFromBadgeLabel(label, fileTypes)) return label;
+  }
+  return null;
+}
+
+function findProviderBadgeLabel(link, providerId) {
+  const root = findResultItemRoot(link, providerId);
+  if (!root) return null;
+
+  if (providerId === "google") {
+    for (const sel of GOOGLE_FILE_BADGE_SELECTORS) {
+      for (const span of root.querySelectorAll(sel)) {
+        const label = (span.textContent || "").trim();
+        if (fileTypeFromBadgeLabel(label, settings.fileTypes)) return label;
+      }
+    }
+    return scanResultItemForBadgeLabel(root, settings.fileTypes);
+  }
+
+  if (providerId === "bing") {
+    for (const el of root.querySelectorAll(".fileType, span[data-tag]")) {
+      const label = (el.textContent || el.getAttribute("data-tag") || "").trim();
+      if (fileTypeFromBadgeLabel(label, settings.fileTypes)) return label;
+    }
+    return scanResultItemForBadgeLabel(root, settings.fileTypes);
+  }
+
+  return scanResultItemForBadgeLabel(root, settings.fileTypes);
+}
+
+function resolveResultFileType(link, url, providerId) {
+  const badgeLabel = findProviderBadgeLabel(link, providerId);
+  return resolveCaptureFileType(url, badgeLabel, settings.fileTypes);
 }
 
 function getQueryFromUrl() {
@@ -844,11 +890,12 @@ function extractUrls(options) {
       continue;
     }
 
-    if (isDocumentUrl(actualUrl)) {
+    const fileType = resolveResultFileType(link, actualUrl, provider.id);
+    if (fileType) {
       seen.add(actualUrl);
       urls.push({
         url: actualUrl,
-        file_type: extractFileType(actualUrl),
+        file_type: fileType,
         query: query,
         provider: provider.name || provider.id || "custom",
         source_page: pageNum,
