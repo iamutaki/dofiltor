@@ -7,6 +7,8 @@ const CAPTCHA_ALERT_KEY = "dofiltor_captcha_alert";
 const CAPTCHA_COUNTDOWN_KEY = "dofiltor_captcha_countdown";
 const ACTIVITY_LOG_KEY = "dofiltor_activity_log";
 const SESSION_STATS_KEY = "dofiltor_session_stats";
+const AUTO_NEXT_DELAY_KEY = "dofiltor_auto_next_delay";
+const DORK_TEMPLATES_KEY = "dofiltor_dork_templates";
 
 const ACTIVITY_TYPE_I18N = {
   scan: "activityTypeScan",
@@ -103,6 +105,9 @@ const SVG = {
   open: "M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z",
   download: "M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z",
   remove: "M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z",
+  selectAll: "M3 5h2v2H3V5zm4 0h14v2H7V5zM3 11h2v2H3v-2zm4 0h14v2H7v-2zM3 17h2v2H3v-2zm4 0h7v2H7v-2zm12.29-1.71L21 17l-4 4-2.29-2.29 1.41-1.41.88.88 2.29-2.29z",
+  selectCheck: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z",
+  edit: "M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z",
   sortAsc: "M7 14l5-5 5 5H7z",
   sortDesc: "M7 10l5 5 5-5H7z",
 };
@@ -484,6 +489,8 @@ function itemFieldValue(item, field) {
   if (field === "domain" || field === "host") return hostOf(item.url);
   if (field === "file" || field === "filename" || field === "name") return nameOf(item.url);
   if (field === "type" || field === "ext") return item.file_type || "";
+  if (field === "tag") return (item.tags || []).join(" ");
+  if (field === "note") return item.note || "";
   if (field === "status") {
     if (item.status === "ok") return "valid ok";
     if (item.status === "fail") return "dead fail";
@@ -523,6 +530,15 @@ function updateStats() {
   $("sFail").textContent = ok || fail || checkingCount ? fail : "\u2014";
   $("sTypes").textContent = types;
   $("btnRemoveDead").style.display = fail > 0 ? "flex" : "none";
+  $("btnSelectDead").style.display = fail > 0 ? "flex" : "none";
+  if (fail > 0) {
+    $("deadBadge").textContent = fail;
+    $("deadBadge").style.display = "block";
+  } else {
+    $("deadBadge").style.display = "none";
+  }
+  const pending = n - ok - fail - checkingCount;
+  $("btnSelectPending").style.display = pending > 0 ? "flex" : "none";
   $("fRight").textContent = n + " URLs" + (downloaded ? " \u00B7 " + downloaded + " downloaded" : "");
 
   const batchable = allUrls.filter((u) => u.status === "ok" && !u.downloaded).length;
@@ -800,6 +816,21 @@ function renderRow(item, viewIndex) {
     dlTag.textContent = t("downloaded");
     mt.appendChild(dlTag);
   }
+  if (item.tags && item.tags.length) {
+    for (const tag of item.tags.slice(0, 3)) {
+      const chip = document.createElement("span");
+      chip.className = "tag-chip-inline";
+      chip.textContent = tag;
+      mt.appendChild(chip);
+    }
+  }
+  if (item.note) {
+    const noteChip = document.createElement("span");
+    noteChip.className = "tag-chip-inline note";
+    noteChip.textContent = item.note.length > 16 ? item.note.substring(0, 16) + "…" : item.note;
+    noteChip.title = item.note;
+    mt.appendChild(noteChip);
+  }
   info.appendChild(mt);
   row.appendChild(info);
 
@@ -823,6 +854,16 @@ function renderRow(item, viewIndex) {
     refresh();
   }));
   acts.appendChild(mkBtn(SVG.remove, "Remove", "danger", async () => {
+    const removed = allUrls.splice(idx, 1);
+    await saveUrls(allUrls);
+    showUndo("Removed 1 URL", async () => {
+      allUrls.splice(idx, 0, removed[0]);
+      await saveUrls(allUrls);
+      refresh();
+    });
+    refresh();
+  }));
+  acts.appendChild(mkBtn(SVG.edit, "Tag", "", () => openTagDialog(item)));
     const removed = allUrls.splice(idx, 1);
     await saveUrls(allUrls);
     showUndo("Removed 1 URL", async () => {
@@ -1079,6 +1120,30 @@ async function removeDead() {
   });
   refresh();
 }
+function selectByStatus(status) {
+  const items = allUrls.filter((u) => u.status === status);
+  for (const item of items) selectedUrls.add(item.url);
+  selectedIndex = items.length ? 0 : -1;
+  updateSelectionAction();
+  renderList();
+  setStatus(t("selectedCount", { n: selectedUrls.size }));
+}
+async function removeSelected() {
+  if (!selectedUrls.size) return;
+  const count = selectedUrls.size;
+  const previous = allUrls.slice();
+  const prevSelection = new Set(selectedUrls);
+  allUrls = allUrls.filter((u) => !selectedUrls.has(u.url));
+  selectedUrls.clear();
+  await saveUrls(allUrls);
+  showUndo(t("removedCount", { n: count }), async () => {
+    allUrls = previous;
+    selectedUrls = prevSelection;
+    await saveUrls(allUrls);
+    refresh();
+  });
+  refresh();
+}
 async function clearAll() {
   if (!allUrls.length) return;
   if (!confirmAction(t("confirmClearAll", { n: allUrls.length }))) return;
@@ -1326,6 +1391,22 @@ function updateAutoNextUI(enabled, status) {
     $("autoStatus").textContent = "";
   }
 }
+
+function renderAutoNextDelay(payload) {
+  const el = $("autoStatus");
+  if (!el) return;
+  if (!payload || payload.done || !payload.secondsLeft || payload.secondsLeft <= 0) {
+    return;
+  }
+  el.textContent = t("delayNextIn", { seconds: String(payload.secondsLeft) });
+}
+    $("autoStatus").textContent = status.message || t("autoNextStuck");
+  } else if (!enabled && status && (status.status === "done" || status.status === "end")) {
+    $("autoStatus").textContent = status.message || "Stopped";
+  } else {
+    $("autoStatus").textContent = "";
+  }
+}
 async function toggleAutoNext() {
   await syncSettings();
   autoNextEnabled = !autoNextEnabled;
@@ -1483,6 +1564,177 @@ async function stopBulkDorkQueue() {
   await sendMessage({ type: "STOP_BULK_DORK" });
   await refreshBulkUI();
   setStatus(t("bulkDorkStopped"));
+}
+
+let dorkTemplates = [];
+
+function setTemplatePanelOpen(open) {
+  const body = $("templateBody");
+  const toggle = $("templateToggle");
+  if (!body || !toggle) return;
+  body.hidden = !open;
+  toggle.setAttribute("aria-expanded", open ? "true" : "false");
+  try { localStorage.setItem("dofiltor_template_open", open ? "1" : "0"); } catch (e) { /* ignore */ }
+}
+
+function renderTemplateList(templates) {
+  const list = $("templateList");
+  const empty = $("templateEmpty");
+  const count = $("templateCount");
+  if (!list) return;
+  dorkTemplates = templates || [];
+  list.replaceChildren();
+  if (count) count.textContent = dorkTemplates.length ? "(" + dorkTemplates.length + ")" : "";
+  if (!dorkTemplates.length) {
+    if (empty) empty.hidden = false;
+    return;
+  }
+  if (empty) empty.hidden = true;
+
+  for (const tpl of dorkTemplates) {
+    const row = document.createElement("div");
+    row.className = "template-row";
+    const info = document.createElement("div");
+    info.className = "rinfo";
+    const nm = document.createElement("div");
+    nm.className = "rname";
+    nm.textContent = tpl.name || "Untitled";
+    nm.title = tpl.name;
+    info.appendChild(nm);
+    const mt = document.createElement("div");
+    mt.className = "rmeta";
+    const queryPreview = (tpl.query || "").substring(0, 60) + ((tpl.query || "").length > 60 ? "..." : "");
+    mt.textContent = queryPreview;
+    mt.title = tpl.query || "";
+    info.appendChild(mt);
+    row.appendChild(info);
+
+    const loadBtn = document.createElement("button");
+    loadBtn.type = "button";
+    loadBtn.className = "template-btn";
+    loadBtn.textContent = t("templatesLoad");
+    loadBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const input = $("bulkDorkInput");
+      if (input && tpl.query) {
+        input.value = input.value ? input.value + "\n" + tpl.query : tpl.query;
+        try { localStorage.setItem("dofiltor_bulk_text", input.value); } catch (e2) { /* ignore */ }
+        setStatus(t("templateLoaded", { name: tpl.name }));
+      }
+    });
+    row.appendChild(loadBtn);
+
+    const delBtn = document.createElement("button");
+    delBtn.type = "button";
+    delBtn.className = "template-btn danger";
+    delBtn.textContent = "×";
+    delBtn.title = t("templatesDelete");
+    delBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await sendMessage({ type: "DELETE_DORK_TEMPLATE", id: tpl.id });
+      await refreshTemplatePanel();
+      setStatus(t("templateDeleted", { name: tpl.name }));
+    });
+    row.appendChild(delBtn);
+
+    list.appendChild(row);
+  }
+}
+
+async function refreshTemplatePanel() {
+  const templates = await sendMessage({ type: "GET_DORK_TEMPLATES" });
+  renderTemplateList(Array.isArray(templates) ? templates : []);
+}
+
+async function addTemplate() {
+  const tab = await activeTab();
+  const url = (tab && tab.url) || "";
+  const provider = (settings.providers || []).find((p) => providerMatchesUrl(p, url));
+  const query = provider ? getDorkQueryFromUrl(url, provider) : "";
+  const name = prompt(t("templateNamePrompt"), query ? query.substring(0, 40) : "");
+  if (!name && name !== "") return;
+  const templateQuery = prompt(t("templateQueryPrompt"), query);
+  if (!templateQuery) return;
+  await sendMessage({ type: "SAVE_DORK_TEMPLATE", name: name || "Untitled", query: templateQuery });
+  await refreshTemplatePanel();
+  setStatus(t("templateSaved", { name: name || "Untitled" }));
+}
+
+let tagDialogItem = null;
+
+function openTagDialog(item) {
+  tagDialogItem = item;
+  const dialog = $("tagDialog");
+  const input = $("tagInput");
+  const noteInput = $("noteInput");
+  const list = $("tagList");
+  if (!dialog || !input || !noteInput || !list) return;
+
+  list.replaceChildren();
+  const tags = item.tags || [];
+  for (const tag of tags) {
+    const chip = document.createElement("span");
+    chip.className = "tag-chip";
+    chip.textContent = tag;
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "tag-remove";
+    removeBtn.textContent = "×";
+    removeBtn.addEventListener("click", async () => {
+      const updated = (tagDialogItem.tags || []).filter((t) => t !== tag);
+      await sendMessage({ type: "UPDATE_URL_META", url: tagDialogItem.url, tags: updated });
+      tagDialogItem.tags = updated;
+      allUrls = await loadUrls();
+      openTagDialog(tagDialogItem);
+      refresh();
+    });
+    chip.appendChild(removeBtn);
+    list.appendChild(chip);
+  }
+  if (!tags.length) {
+    const empty = document.createElement("span");
+    empty.className = "tag-empty";
+    empty.textContent = t("tagEmpty");
+    list.appendChild(empty);
+  }
+
+  noteInput.value = item.note || "";
+  input.value = "";
+  dialog.classList.add("show");
+  dialog.setAttribute("aria-hidden", "false");
+  input.focus();
+}
+
+function closeTagDialog() {
+  const dialog = $("tagDialog");
+  if (dialog) {
+    dialog.classList.remove("show");
+    dialog.setAttribute("aria-hidden", "true");
+  }
+  tagDialogItem = null;
+}
+
+async function addTagFromInput() {
+  if (!tagDialogItem) return;
+  const input = $("tagInput");
+  const tag = (input?.value || "").trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+  if (!tag) return;
+  const tags = [...new Set([...(tagDialogItem.tags || []), tag])];
+  await sendMessage({ type: "UPDATE_URL_META", url: tagDialogItem.url, tags });
+  tagDialogItem.tags = tags;
+  allUrls = await loadUrls();
+  openTagDialog(tagDialogItem);
+  refresh();
+}
+
+async function saveNoteFromInput() {
+  if (!tagDialogItem) return;
+  const noteInput = $("noteInput");
+  const note = (noteInput?.value || "").trim();
+  await sendMessage({ type: "UPDATE_URL_META", url: tagDialogItem.url, note });
+  tagDialogItem.note = note;
+  allUrls = await loadUrls();
+  refresh();
 }
 
 function handleBulkDorkStatus(msg) {
@@ -1725,6 +1977,10 @@ function onKeyboard(e) {
     closeTypeDialog();
     return;
   }
+  if (e.key === "Escape" && $("tagDialog")?.classList.contains("show")) {
+    closeTagDialog();
+    return;
+  }
   const tag = e.target.tagName;
   if (["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(tag)) return;
   if (!lastViewItems.length) return;
@@ -1748,6 +2004,28 @@ function onKeyboard(e) {
     const idx = allUrls.indexOf(item);
     allUrls.splice(idx, 1);
     saveUrls(allUrls).then(refresh);
+  } else if (e.key === " ") {
+    e.preventDefault();
+    if (selectedIndex >= 0) {
+      const url = lastViewItems[selectedIndex].url;
+      if (selectedUrls.has(url)) selectedUrls.delete(url);
+      else selectedUrls.add(url);
+      updateSelectionAction();
+      renderList();
+    }
+  } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "e") {
+    e.preventDefault();
+    exportCurrent();
+  } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
+    e.preventDefault();
+    $("searchInput")?.focus();
+  } else if (e.key.toLowerCase() === "g" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    e.preventDefault();
+    manualGrab();
+  } else if (e.key === "Escape") {
+    e.preventDefault();
+    clearFilters();
+    unselectAll();
   }
 }
 
@@ -1801,6 +2079,8 @@ function initPopupUi() {
   bindClick("btnBatchDl", batchDownload);
   bindClick("btnHistory", showHistory);
   bindClick("btnRemoveDead", removeDead);
+  bindClick("btnSelectDead", () => selectByStatus("fail"));
+  bindClick("btnSelectPending", () => selectByStatus("pending"));
   bindClick("btnClear", clearAll);
   bindClick("btnSettings", toggleSettingsPanel);
   bindChange("sortKey", syncSort);
@@ -1827,11 +2107,34 @@ function initPopupUi() {
   });
   bindClick("bulkStartBtn", startBulkDorkQueue);
   bindClick("bulkStopBtn", stopBulkDorkQueue);
+  bindClick("templateToggle", () => {
+    const body = $("templateBody");
+    setTemplatePanelOpen(body ? body.hidden : true);
+  });
+  bindClick("templateAddBtn", addTemplate);
+  bindClick("tagDialogClose", closeTagDialog);
+  bindEl("tagDialog", "click", (e) => {
+    if (e.target.id === "tagDialog") closeTagDialog();
+  });
+  bindEl("tagInput", "keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); addTagFromInput(); }
+  });
+  bindClick("tagAddBtn", addTagFromInput);
+  bindClick("tagSaveNoteBtn", saveNoteFromInput);
   bindClick("activityToggle", () => {
     const body = $("activityBody");
     setActivityPanelOpen(body ? body.hidden : true);
   });
   bindClick("activityClearBtn", clearActivityLog);
+  bindClick("shortcutsToggle", () => {
+    const body = $("shortcutsBody");
+    const toggle = $("shortcutsToggle");
+    if (!body || !toggle) return;
+    const open = body.hidden;
+    body.hidden = !open;
+    toggle.setAttribute("aria-expanded", open ? "true" : "false");
+    try { localStorage.setItem("dofiltor_shortcuts_open", open ? "1" : "0"); } catch (e) { /* ignore */ }
+  });
   bindEl("urlList", "scroll", scheduleRenderList);
   bindEl("domainBar", "wheel", (e) => {
     const bar = $("domainBar");
@@ -1934,6 +2237,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (changes[SESSION_STATS_KEY]) {
         renderSessionDomainBar(changes[SESSION_STATS_KEY].newValue || { domains: {} });
       }
+      if (changes[AUTO_NEXT_DELAY_KEY]) {
+        renderAutoNextDelay(changes[AUTO_NEXT_DELAY_KEY].newValue);
+      }
     });
   }
 
@@ -1947,6 +2253,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (msg.type === "BULK_DORK_STATUS") handleBulkDorkStatus(msg);
       if (msg.type === "ACTIVITY_LOG_UPDATED") renderActivityLog(msg.log || []);
       if (msg.type === "SESSION_STATS_UPDATED") renderSessionDomainBar(msg.stats || { domains: {} });
+      if (msg.type === "AUTO_NEXT_DELAY_UPDATE") renderAutoNextDelay(msg);
     });
   }
 
@@ -1974,7 +2281,19 @@ document.addEventListener("DOMContentLoaded", async () => {
     } catch (e) { /* ignore */ }
     refreshBulkUI();
     try {
+      setTemplatePanelOpen(localStorage.getItem("dofiltor_template_open") === "1");
+    } catch (e) { /* ignore */ }
+    refreshTemplatePanel();
+    try {
       setActivityPanelOpen(localStorage.getItem("dofiltor_activity_open") === "1");
+    } catch (e) { /* ignore */ }
+    try {
+      const sBody = $("shortcutsBody");
+      const sToggle = $("shortcutsToggle");
+      if (sBody && sToggle && localStorage.getItem("dofiltor_shortcuts_open") === "1") {
+        sBody.hidden = false;
+        sToggle.setAttribute("aria-expanded", "true");
+      }
     } catch (e) { /* ignore */ }
     refreshActivityLog();
     refreshSessionDomainStats();

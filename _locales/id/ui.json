@@ -251,5 +251,42 @@
   "unselectAll": "Batalkan semua pilihan",
   "formatXlsx": "XLSX",
   "clearFilters": "Hapus filter",
-  "invalidFilter": "Pattern filter tidak valid"
+  "invalidFilter": "Pattern filter tidak valid",
+
+  "shortcutsTitle": "Pintasan keyboard",
+  "shortcutNav": "Navigasi baris",
+  "shortcutSelect": "Toggle pilihan",
+  "shortcutOpen": "Buka URL",
+  "shortcutRemove": "Hapus baris",
+  "shortcutExport": "Ekspor",
+  "shortcutFilter": "Fokus filter",
+  "shortcutGrab": "Grab halaman",
+  "shortcutClear": "Hapus filter",
+
+  "selectDead": "Pilih semua dead",
+  "selectPending": "Pilih semua pending",
+  "selectedCount": "Dipilih {n}",
+  "removedCount": "Dihapus {n} URL",
+
+  "delayNextIn": "Lanjut dalam {seconds} dtk…",
+
+  "templatesTitle": "Template dork",
+  "templatesAdd": "Simpan dork saat ini",
+  "templatesEmpty": "Belum ada template tersimpan",
+  "templatesDelete": "Hapus template",
+  "templatesLoad": "Muat",
+  "templateNamePrompt": "Nama template:",
+  "templateQueryPrompt": "Query dork:",
+  "templateSaved": "Template \"{name}\" disimpan",
+  "templateDeleted": "Template \"{name}\" dihapus",
+  "templateLoaded": "Memuat \"{name}\" ke antrian bulk",
+
+  "tagTitle": "Edit tag & catatan",
+  "tagAdd": "Tambah",
+  "tagAddPlaceholder": "Tambah tag...",
+  "tagRemove": "Hapus tag",
+  "tagEmpty": "Belum ada tag",
+  "notePlaceholder": "Tambah catatan...",
+  "tagSaveNote": "Simpan catatan",
+  "tagFilterHint": "Filter: tag:value atau note:value"
 }

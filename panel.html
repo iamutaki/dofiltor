@@ -756,6 +756,157 @@
       display: flex; justify-content: space-between; flex-shrink: 0;
       background: var(--c-bg-section);
     }
+
+    .shortcuts-panel {
+      border-top: 1px solid var(--c-border);
+      background: var(--c-bg-section);
+      flex-shrink: 0;
+      font-size: 10px;
+    }
+    .shortcuts-head {
+      display: flex; align-items: center; gap: 6px;
+      padding: 3px 12px;
+    }
+    .shortcuts-toggle {
+      border: none; background: transparent; color: var(--c-text-3);
+      font: inherit; font-weight: 500; cursor: pointer; padding: 2px 0; flex: 1; text-align: left;
+    }
+    .shortcuts-toggle:hover { color: var(--c-blue); }
+    .shortcuts-body { padding: 2px 12px 6px; }
+    .shortcuts-body[hidden] { display: none !important; }
+    .shortcut-grid {
+      display: grid; grid-template-columns: auto 1fr; gap: 2px 12px;
+      list-style: none; margin: 0; padding: 0;
+    }
+    .shortcut-grid kbd {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 9px; padding: 1px 4px; border-radius: 3px;
+      background: var(--c-bg-hover); border: 1px solid var(--c-border);
+      color: var(--c-text-2); white-space: nowrap;
+    }
+    .shortcut-grid span { color: var(--c-text-3); }
+
+    .template-panel {
+      border-bottom: 1px solid var(--c-border);
+      background: var(--c-bg-section);
+      flex-shrink: 0;
+      font-size: 11px;
+    }
+    .template-head {
+      display: flex; align-items: center; gap: 8px;
+      padding: 5px 12px;
+    }
+    .template-toggle {
+      border: none; background: transparent; color: var(--c-text-2);
+      font: inherit; font-weight: 500; cursor: pointer; padding: 2px 0;
+    }
+    .template-toggle:hover { color: var(--c-blue); }
+    .template-count {
+      color: var(--c-text-3); font-size: 10px; flex: 1;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .template-body { padding: 0 12px 8px; }
+    .template-body[hidden] { display: none !important; }
+    .template-list {
+      max-height: 160px; overflow-y: auto;
+      border: 1px solid var(--c-border); border-radius: 4px;
+      background: var(--c-bg); margin-bottom: 6px;
+    }
+    .template-empty {
+      padding: 8px; text-align: center; color: var(--c-text-3); font-size: 10px;
+    }
+    .template-row {
+      padding: 5px 8px; display: flex; align-items: center; gap: 6px;
+      border-bottom: 1px solid var(--c-border); font-size: 11px;
+    }
+    .template-row:last-child { border-bottom: none; }
+    .template-row:hover { background: var(--c-bg-hover); }
+    .template-row .rinfo { flex: 1; min-width: 0; }
+    .template-row .rname {
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      font-size: 11px; font-weight: 500;
+    }
+    .template-row .rmeta {
+      font-size: 10px; color: var(--c-text-3);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .template-btn {
+      padding: 2px 8px; border-radius: 3px; border: 1px solid var(--c-border);
+      background: var(--c-bg); color: var(--c-text-2); font: inherit; font-size: 10px;
+      cursor: pointer; flex-shrink: 0;
+    }
+    .template-btn:hover { border-color: var(--c-blue); color: var(--c-blue); }
+    .template-btn.danger { border-color: transparent; color: var(--c-text-3); padding: 2px 5px; }
+    .template-btn.danger:hover { color: var(--c-red); border-color: var(--c-red); }
+    .template-actions { display: flex; gap: 6px; }
+
+    .tag-chip-inline {
+      display: inline-block; padding: 0 4px; border-radius: 3px; font-size: 9px;
+      background: color-mix(in srgb, var(--c-blue) 12%, transparent);
+      color: var(--c-blue); border: 1px solid color-mix(in srgb, var(--c-blue) 25%, var(--c-border));
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .tag-chip-inline.note {
+      background: color-mix(in srgb, var(--c-orange) 10%, transparent);
+      color: var(--c-orange);
+      border-color: color-mix(in srgb, var(--c-orange) 25%, var(--c-border));
+    }
+    .tag-dialog {
+      display: none; position: fixed; inset: 0; z-index: 9997;
+      background: rgba(0,0,0,0.24); align-items: center; justify-content: center;
+      padding: 14px;
+    }
+    .tag-dialog.show { display: flex; }
+    .tag-panel {
+      width: min(340px, 100%); max-height: 360px; overflow: hidden;
+      background: var(--c-bg); border: 1px solid var(--c-border); border-radius: 8px;
+      box-shadow: 0 14px 36px rgba(0,0,0,0.24); display: flex; flex-direction: column;
+    }
+    .tag-head {
+      height: 38px; display: flex; align-items: center; gap: 8px;
+      padding: 0 10px; border-bottom: 1px solid var(--c-border);
+      font-size: 12px; font-weight: 600;
+    }
+    .tag-head span { flex: 1; }
+    .tag-body { padding: 8px 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+    .tag-list {
+      display: flex; flex-wrap: wrap; gap: 4px; min-height: 20px;
+    }
+    .tag-empty { color: var(--c-text-3); font-size: 10px; }
+    .tag-chip {
+      display: inline-flex; align-items: center; gap: 2px;
+      padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 500;
+      background: color-mix(in srgb, var(--c-blue) 12%, transparent);
+      color: var(--c-blue); border: 1px solid color-mix(in srgb, var(--c-blue) 25%, var(--c-border));
+    }
+    .tag-remove {
+      border: none; background: transparent; color: var(--c-blue); cursor: pointer;
+      font-size: 12px; line-height: 1; padding: 0;
+    }
+    .tag-remove:hover { color: var(--c-red); }
+    .tag-input-row { display: flex; gap: 4px; }
+    .tag-input {
+      flex: 1; height: 26px; padding: 0 8px; border: 1px solid var(--c-border);
+      border-radius: 4px; font: inherit; font-size: 11px;
+      background: var(--c-bg); color: var(--c-text); outline: none;
+    }
+    .tag-input:focus { border-color: var(--c-blue); }
+    .tag-btn {
+      padding: 4px 10px; border-radius: 4px; border: 1px solid var(--c-border);
+      background: var(--c-bg); color: var(--c-text-2); font: inherit; font-size: 11px;
+      cursor: pointer; flex-shrink: 0;
+    }
+    .tag-btn:hover { border-color: var(--c-blue); color: var(--c-blue); }
+    .tag-btn.primary { background: var(--c-blue); border-color: var(--c-blue); color: #fff; }
+    .tag-btn.primary:hover { filter: brightness(1.05); }
+    .tag-note {
+      width: 100%; min-height: 48px; max-height: 80px; resize: vertical;
+      border: 1px solid var(--c-border); border-radius: 4px;
+      padding: 4px 8px; font: 11px/1.35 inherit;
+      background: var(--c-bg); color: var(--c-text); outline: none;
+    }
+    .tag-note:focus { border-color: var(--c-blue); }
   </style>
 </head>
 <body>
@@ -837,6 +988,20 @@
     </div>
   </div>
 
+  <div class="template-panel" id="templatePanel">
+    <div class="template-head">
+      <button type="button" class="template-toggle" id="templateToggle" aria-expanded="false" data-i18n="templatesTitle">Dork templates</button>
+      <span class="template-count" id="templateCount"></span>
+    </div>
+    <div class="template-body" id="templateBody" hidden>
+      <div class="template-list" id="templateList"></div>
+      <p class="template-empty" id="templateEmpty" hidden data-i18n="templatesEmpty">No saved templates</p>
+      <div class="template-actions">
+        <button type="button" class="template-btn" id="templateAddBtn" data-i18n="templatesAdd">Save current dork</button>
+      </div>
+    </div>
+  </div>
+
   <div class="stats">
     <div class="stat"><div class="sv b" id="sTotal">0</div><div class="sl" data-i18n="statUrls">URLs</div></div>
     <div class="stat"><div class="sv" id="sOk">&mdash;</div><div class="sl" data-i18n="statValid">Valid</div></div>
@@ -877,6 +1042,13 @@
     <span class="spacer"></span>
     <button class="ib danger" id="btnRemoveDead" style="display:none" data-tip="Remove dead" data-i18n-tip="removeDead" data-i18n-aria="removeDead">
       <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+    </button>
+    <button class="ib" id="btnSelectDead" style="display:none" data-tip="Select all dead" data-i18n-tip="selectDead" data-i18n-aria="selectDead">
+      <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+      <span class="badge sel" id="deadBadge" style="display:none"></span>
+    </button>
+    <button class="ib" id="btnSelectPending" style="display:none" data-tip="Select all pending" data-i18n-tip="selectPending" data-i18n-aria="selectPending">
+      <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
     </button>
     <button class="ib danger" id="btnClear" data-tip="Clear all" data-i18n-tip="clearAll" data-i18n-aria="clearAll">
       <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
@@ -951,6 +1123,24 @@
     </div>
   </div>
 
+  <div class="shortcuts-panel" id="shortcutsPanel">
+    <div class="shortcuts-head">
+      <button type="button" class="shortcuts-toggle" id="shortcutsToggle" aria-expanded="false" data-i18n="shortcutsTitle">Keyboard shortcuts</button>
+    </div>
+    <div class="shortcuts-body" id="shortcutsBody" hidden>
+      <ul class="shortcut-grid">
+        <li><kbd>↑ ↓</kbd> <span data-i18n="shortcutNav">Navigate rows</span></li>
+        <li><kbd>Space</kbd> <span data-i18n="shortcutSelect">Toggle select</span></li>
+        <li><kbd>Enter</kbd> <span data-i18n="shortcutOpen">Open URL</span></li>
+        <li><kbd>Del</kbd> <span data-i18n="shortcutRemove">Remove row</span></li>
+        <li><kbd>Ctrl+E</kbd> <span data-i18n="shortcutExport">Export</span></li>
+        <li><kbd>Ctrl+F</kbd> <span data-i18n="shortcutFilter">Focus filter</span></li>
+        <li><kbd>G</kbd> <span data-i18n="shortcutGrab">Grab page</span></li>
+        <li><kbd>Esc</kbd> <span data-i18n="shortcutClear">Clear filters</span></li>
+      </ul>
+    </div>
+  </div>
+
   <div class="footer">
     <span id="fLeft" data-i18n="ready">Ready</span>
     <span id="fRight"></span>
@@ -969,6 +1159,26 @@
         </button>
       </div>
       <div class="type-list" id="typeList"></div>
+    </div>
+  </div>
+
+  <div class="tag-dialog" id="tagDialog" aria-hidden="true">
+    <div class="tag-panel" role="dialog" aria-modal="true">
+      <div class="tag-head">
+        <span data-i18n="tagTitle">Edit tags & notes</span>
+        <button class="ib" id="tagDialogClose" type="button" data-i18n-aria="close">
+          <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </div>
+      <div class="tag-body">
+        <div class="tag-list" id="tagList"></div>
+        <div class="tag-input-row">
+          <input type="text" class="tag-input" id="tagInput" data-i18n-placeholder="tagAddPlaceholder" placeholder="Add tag...">
+          <button type="button" class="tag-btn primary" id="tagAddBtn" data-i18n="tagAdd">Add</button>
+        </div>
+        <textarea class="tag-note" id="noteInput" data-i18n-placeholder="notePlaceholder" placeholder="Add a note..."></textarea>
+        <button type="button" class="tag-btn" id="tagSaveNoteBtn" data-i18n="tagSaveNote">Save note</button>
+      </div>
     </div>
   </div>
 

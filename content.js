@@ -39,6 +39,7 @@ let contextDead = false;
 let lastDoneSignalKey = "";
 let pendingAutoNextDelay = null;
 let extensionKnownUrls = null;
+let autoNextDelayInterval = null;
 
 function isDfcDebug() {
   try {
@@ -80,6 +81,7 @@ function shutdown() {
   clearTimeout(nextTimer);
   clearTimeout(navigationWatchTimer);
   clearTimeout(scheduleAfterScanTimer);
+  clearAutoNextDelayCountdown();
   // Stop observers
   try { urlObserver.disconnect(); } catch (e) { /* ignore */ }
   try { domObserver.disconnect(); } catch (e) { /* ignore */ }
@@ -1028,6 +1030,19 @@ function scan() {
 
 // --- Auto next page ---
 
+function clearAutoNextDelayCountdown() {
+  clearInterval(autoNextDelayInterval);
+  autoNextDelayInterval = null;
+}
+
+function broadcastAutoNextDelay(secondsLeft) {
+  sendMsg({
+    type: "AUTO_NEXT_DELAY",
+    secondsLeft: secondsLeft,
+    done: secondsLeft <= 0,
+  });
+}
+
 function scheduleAutoNext(delay, waitAttempt) {
   if (contextDead || !settings.autoNext || captchaDetected || captchaResumePending) return;
   if (!settings.enabled) return;
@@ -1064,7 +1079,23 @@ function scheduleAutoNext(delay, waitAttempt) {
     next: page + 1,
   });
 
+  clearAutoNextDelayCountdown();
+  const delaySec = Math.ceil(delay / 1000);
+  let remaining = delaySec;
+  broadcastAutoNextDelay(remaining);
+  autoNextDelayInterval = setInterval(() => {
+    remaining -= 1;
+    if (remaining <= 0) {
+      clearAutoNextDelayCountdown();
+      broadcastAutoNextDelay(0);
+      return;
+    }
+    broadcastAutoNextDelay(remaining);
+  }, 1000);
+
   nextTimer = setTimeout(() => {
+    clearAutoNextDelayCountdown();
+    broadcastAutoNextDelay(0);
     if (contextDead || !settings.autoNext || captchaDetected) return;
     const hrefBefore = location.href;
     const pageBefore = getPageNumber();

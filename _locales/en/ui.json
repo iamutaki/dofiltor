@@ -251,5 +251,42 @@
   "unselectAll": "Unselect all",
   "formatXlsx": "XLSX",
   "clearFilters": "Clear filters",
-  "invalidFilter": "Invalid filter pattern"
+  "invalidFilter": "Invalid filter pattern",
+
+  "shortcutsTitle": "Keyboard shortcuts",
+  "shortcutNav": "Navigate rows",
+  "shortcutSelect": "Toggle select",
+  "shortcutOpen": "Open URL",
+  "shortcutRemove": "Remove row",
+  "shortcutExport": "Export",
+  "shortcutFilter": "Focus filter",
+  "shortcutGrab": "Grab page",
+  "shortcutClear": "Clear filters",
+
+  "selectDead": "Select all dead",
+  "selectPending": "Select all pending",
+  "selectedCount": "Selected {n}",
+  "removedCount": "Removed {n} URLs",
+
+  "delayNextIn": "Next in {seconds}s…",
+
+  "templatesTitle": "Dork templates",
+  "templatesAdd": "Save current dork",
+  "templatesEmpty": "No saved templates",
+  "templatesDelete": "Delete template",
+  "templatesLoad": "Load",
+  "templateNamePrompt": "Template name:",
+  "templateQueryPrompt": "Dork query:",
+  "templateSaved": "Template \"{name}\" saved",
+  "templateDeleted": "Template \"{name}\" deleted",
+  "templateLoaded": "Loaded \"{name}\" into bulk queue",
+
+  "tagTitle": "Edit tags & notes",
+  "tagAdd": "Add",
+  "tagAddPlaceholder": "Add tag...",
+  "tagRemove": "Remove tag",
+  "tagEmpty": "No tags",
+  "notePlaceholder": "Add a note...",
+  "tagSaveNote": "Save note",
+  "tagFilterHint": "Filter: tag:value or note:value"
 }

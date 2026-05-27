@@ -12,6 +12,8 @@ const ACTIVITY_LOG_KEY = "dofiltor_activity_log";
 const SESSION_STATS_KEY = "dofiltor_session_stats";
 const BULK_DORK_KEY = "dofiltor_bulk_dork";
 const CAPTCHA_COUNTDOWN_KEY = "dofiltor_captcha_countdown";
+const AUTO_NEXT_DELAY_KEY = "dofiltor_auto_next_delay";
+const DORK_TEMPLATES_KEY = "dofiltor_dork_templates";
 
 function showExtensionNotification(id, options, settings) {
   if (!settings || !settings.notifications) return;
@@ -1148,6 +1150,72 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
   if (msg.type === "GET_BULK_DORK_STATUS") {
     getBulkState().then((bulk) => sendResponse(bulk || { active: false }));
+    return true;
+  }
+
+  if (msg.type === "AUTO_NEXT_DELAY") {
+    const payload = { secondsLeft: msg.secondsLeft || 0, done: !!msg.done, time: Date.now() };
+    if (msg.done || !msg.secondsLeft) {
+      chrome.storage.local.remove(AUTO_NEXT_DELAY_KEY);
+    } else {
+      chrome.storage.local.set({ [AUTO_NEXT_DELAY_KEY]: payload });
+    }
+    broadcastRuntimeMessage({ type: "AUTO_NEXT_DELAY_UPDATE", ...payload });
+    sendResponse({ ok: true });
+    return false;
+  }
+
+  if (msg.type === "GET_AUTO_NEXT_DELAY") {
+    chrome.storage.local.get(AUTO_NEXT_DELAY_KEY, (res) => {
+      sendResponse(res[AUTO_NEXT_DELAY_KEY] || { secondsLeft: 0, done: true });
+    });
+    return true;
+  }
+
+  if (msg.type === "GET_DORK_TEMPLATES") {
+    chrome.storage.local.get(DORK_TEMPLATES_KEY, (res) => {
+      sendResponse(res[DORK_TEMPLATES_KEY] || []);
+    });
+    return true;
+  }
+
+  if (msg.type === "SAVE_DORK_TEMPLATE") {
+    chrome.storage.local.get(DORK_TEMPLATES_KEY, (res) => {
+      const templates = res[DORK_TEMPLATES_KEY] || [];
+      const id = msg.id || ("tpl_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7));
+      const existing = templates.findIndex((t) => t.id === id);
+      const entry = {
+        id,
+        name: String(msg.name || "").trim() || "Untitled",
+        query: String(msg.query || "").trim(),
+        createdAt: existing >= 0 ? templates[existing].createdAt : new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      if (existing >= 0) templates[existing] = entry;
+      else templates.unshift(entry);
+      chrome.storage.local.set({ [DORK_TEMPLATES_KEY]: templates }, () => sendResponse({ ok: true, template: entry }));
+    });
+    return true;
+  }
+
+  if (msg.type === "DELETE_DORK_TEMPLATE") {
+    chrome.storage.local.get(DORK_TEMPLATES_KEY, (res) => {
+      const templates = (res[DORK_TEMPLATES_KEY] || []).filter((t) => t.id !== msg.id);
+      chrome.storage.local.set({ [DORK_TEMPLATES_KEY]: templates }, () => sendResponse({ ok: true }));
+    });
+    return true;
+  }
+
+  if (msg.type === "UPDATE_URL_META") {
+    const key = normalizeFileUrl(msg.url);
+    if (!key) { sendResponse({ ok: false }); return false; }
+    getUrls().then((urls) => {
+      const item = urls.find((u) => normalizeFileUrl(u.url) === key);
+      if (!item) { sendResponse({ ok: false }); return; }
+      if (msg.tags != null) item.tags = msg.tags;
+      if (msg.note != null) item.note = msg.note;
+      saveUrls(urls).then(() => sendResponse({ ok: true }));
+    });
     return true;
   }
 
