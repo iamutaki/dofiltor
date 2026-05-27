@@ -11,17 +11,7 @@ const PROVIDER_SEARCH_BASE = {
 };
 
 function providerHostBase(hostContains) {
-  return String(hostContains || "")
-    .trim()
-    .toLowerCase()
-    .replace(/^https?:\/\//, "")
-    .replace(/^\*:\/\//, "")
-    .replace(/^\*\./, "")
-    .replace(/^\./, "")
-    .replace(/\/.*$/, "")
-    .replace(/:\d+$/, "")
-    .replace(/[^a-z0-9.-]/g, "")
-    .replace(/^\.+|\.+$/g, "");
+  return hostBaseFromPattern(hostContains);
 }
 
 function buildProviderSearchUrl(provider, query) {
@@ -50,10 +40,16 @@ function parseBulkDorkLines(text) {
 function providerMatchesUrl(provider, url) {
   try {
     const parsed = new URL(String(url || ""));
-    const hostNeedle = String(provider.hostContains || "").toLowerCase();
+    const host = parsed.hostname.toLowerCase();
     const pathNeedle = String(provider.pathContains || "").toLowerCase();
+    const hostMatch = provider.hostPattern
+      ? hostMatchesGlob(host, provider.hostPattern)
+      : (function () {
+          const hostNeedle = String(provider.hostContains || "").toLowerCase();
+          return !hostNeedle || host.includes(hostNeedle);
+        })();
     return !!provider.enabled &&
-      (!hostNeedle || parsed.hostname.toLowerCase().includes(hostNeedle)) &&
+      hostMatch &&
       (!pathNeedle || parsed.pathname.toLowerCase().includes(pathNeedle));
   } catch (e) {
     return false;

@@ -37,11 +37,11 @@ const DEFAULT_SETTINGS = {
   dorkHistoryMax: 200,
   fileTypes: DEFAULT_FILE_TYPES,
   providers: [
-    { id: "google", name: "Google", enabled: true, hostContains: "google.", pathContains: "/search", queryParam: "q", nextSelector: "#pnnext, a#pnnext, a[aria-label=\"Next page\"], a[aria-label=\"Halaman berikutnya\"]" },
-    { id: "bing", name: "Bing", enabled: true, hostContains: "bing.com", pathContains: "/search", queryParam: "q", nextSelector: "a.sb_pagN" },
-    { id: "duckduckgo", name: "DuckDuckGo", enabled: true, hostContains: "duckduckgo.com", pathContains: "/", queryParam: "q", nextSelector: "a[rel='next']" },
-    { id: "yahoo", name: "Yahoo", enabled: false, hostContains: "search.yahoo.com", pathContains: "/search", queryParam: "p", nextSelector: "a.next" },
-    { id: "yandex", name: "Yandex", enabled: false, hostContains: "yandex.", pathContains: "/search", queryParam: "text", nextSelector: "a[aria-label='Next page']" },
+    { id: "google", name: "Google", enabled: true, hostPattern: "**.google.**", hostContains: "google.", pathContains: "/search", queryParam: "q", nextSelector: "#pnnext, a#pnnext, a[aria-label=\"Next page\"], a[aria-label=\"Halaman berikutnya\"]" },
+    { id: "bing", name: "Bing", enabled: true, hostPattern: "**.bing.com", hostContains: "bing.com", pathContains: "/search", queryParam: "q", nextSelector: "a.sb_pagN" },
+    { id: "duckduckgo", name: "DuckDuckGo", enabled: true, hostPattern: "**.duckduckgo.com", hostContains: "duckduckgo.com", pathContains: "/", queryParam: "q", nextSelector: "a[rel='next']" },
+    { id: "yahoo", name: "Yahoo", enabled: false, hostPattern: "**.search.yahoo.com", hostContains: "search.yahoo.com", pathContains: "/search", queryParam: "p", nextSelector: "a.next" },
+    { id: "yandex", name: "Yandex", enabled: false, hostPattern: "**.yandex.**", hostContains: "yandex.", pathContains: "/search", queryParam: "text", nextSelector: "a[aria-label='Next page']" },
   ],
 };
 const STATIC_PROVIDER_HOSTS = new Set([
@@ -330,9 +330,11 @@ function pingContentScript(tabId) {
     });
   });
 }
-function setScopeReloadVisible(show) {
-  const btn = $("scopeReloadBtn");
-  if (btn) btn.hidden = !show;
+function setScopeActionButtons({ grant, reload }) {
+  const grantBtn = $("scopeGrantBtn");
+  const reloadBtn = $("scopeReloadBtn");
+  if (grantBtn) grantBtn.hidden = !grant;
+  if (reloadBtn) reloadBtn.hidden = !reload;
 }
 function hasProviderPermission(provider) {
   const host = providerHostBase(provider.hostContains);
@@ -349,7 +351,7 @@ function setScope(status, text) {
   label.textContent = text;
 }
 async function updateScopeIndicator() {
-  setScopeReloadVisible(false);
+  setScopeActionButtons({ grant: false, reload: false });
   if (!extensionEnabled) {
     setScope("paused", t("scopePaused"));
     return;
@@ -364,13 +366,14 @@ async function updateScopeIndicator() {
   const hasPermission = await hasProviderPermission(provider);
   if (!hasPermission) {
     setScope("permission", t("scopePermissionNeeded", { provider: provider.name || provider.id || "Provider" }));
+    setScopeActionButtons({ grant: true, reload: false });
     return;
   }
   if (tab && tab.id != null) {
     const ping = await pingContentScript(tab.id);
     if (!ping.alive) {
       setScope("stale", t("scopeStale"));
-      setScopeReloadVisible(true);
+      setScopeActionButtons({ grant: false, reload: true });
       return;
     }
   }
@@ -1857,6 +1860,10 @@ function initPopupUi() {
   const scopeBar = $("scopeBar");
   if (scopeBar) {
     scopeBar.addEventListener("click", (e) => {
+      if (e.target.closest("#scopeGrantBtn")) {
+        if (hasChromeRuntime()) chrome.runtime.openOptionsPage();
+        return;
+      }
       if (!e.target.closest("#scopeReloadBtn")) return;
       if (!hasChromeTabs()) return;
       activeTab().then((tab) => {

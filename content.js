@@ -5,11 +5,11 @@
  */
 
 const DEFAULT_PROVIDERS = [
-  { id: "google", name: "Google", enabled: true, hostContains: "google.", pathContains: "/search", queryParam: "q", nextSelector: "#pnnext, a#pnnext, a[aria-label=\"Next page\"], a[aria-label=\"Halaman berikutnya\"]" },
-  { id: "bing", name: "Bing", enabled: true, hostContains: "bing.com", pathContains: "/search", queryParam: "q", nextSelector: "a.sb_pagN" },
-  { id: "duckduckgo", name: "DuckDuckGo", enabled: true, hostContains: "duckduckgo.com", pathContains: "/", queryParam: "q", nextSelector: "a[rel='next']" },
-  { id: "yahoo", name: "Yahoo", enabled: false, hostContains: "search.yahoo.com", pathContains: "/search", queryParam: "p", nextSelector: "a.next" },
-  { id: "yandex", name: "Yandex", enabled: false, hostContains: "yandex.", pathContains: "/search", queryParam: "text", nextSelector: "a[aria-label='Next page']" },
+  { id: "google", name: "Google", enabled: true, hostPattern: "**.google.**", hostContains: "google.", pathContains: "/search", queryParam: "q", nextSelector: "#pnnext, a#pnnext, a[aria-label=\"Next page\"], a[aria-label=\"Halaman berikutnya\"]" },
+  { id: "bing", name: "Bing", enabled: true, hostPattern: "**.bing.com", hostContains: "bing.com", pathContains: "/search", queryParam: "q", nextSelector: "a.sb_pagN" },
+  { id: "duckduckgo", name: "DuckDuckGo", enabled: true, hostPattern: "**.duckduckgo.com", hostContains: "duckduckgo.com", pathContains: "/", queryParam: "q", nextSelector: "a[rel='next']" },
+  { id: "yahoo", name: "Yahoo", enabled: false, hostPattern: "**.search.yahoo.com", hostContains: "search.yahoo.com", pathContains: "/search", queryParam: "p", nextSelector: "a.next" },
+  { id: "yandex", name: "Yandex", enabled: false, hostPattern: "**.yandex.**", hostContains: "yandex.", pathContains: "/search", queryParam: "text", nextSelector: "a[aria-label='Next page']" },
 ];
 
 const SETTINGS_KEY = "dofiltor_settings";
@@ -301,14 +301,19 @@ function hasExplicitEndOfResults() {
     bodyText.includes("tidak ada hasil");
 }
 
+function _providerHostMatch(provider, host) {
+  if (provider.hostPattern) return hostMatchesGlob(host, provider.hostPattern);
+  const hostNeedle = String(provider.hostContains || "").toLowerCase();
+  return !hostNeedle || host.includes(hostNeedle);
+}
+
 function getActiveProvider() {
   const host = window.location.hostname.toLowerCase();
   const path = window.location.pathname.toLowerCase();
   return (settings.providers || []).find((provider) => {
     if (!provider || !provider.enabled) return false;
-    const hostNeedle = String(provider.hostContains || "").toLowerCase();
     const pathNeedle = String(provider.pathContains || "").toLowerCase();
-    return (!hostNeedle || host.includes(hostNeedle)) && (!pathNeedle || path.includes(pathNeedle));
+    return _providerHostMatch(provider, host) && (!pathNeedle || path.includes(pathNeedle));
   }) || null;
 }
 
@@ -317,8 +322,7 @@ function isProviderUrl(url) {
     const parsed = new URL(url);
     const host = parsed.hostname.toLowerCase();
     return (settings.providers || []).some((provider) => {
-      const hostNeedle = String(provider.hostContains || "").toLowerCase();
-      return hostNeedle && host.includes(hostNeedle);
+      return _providerHostMatch(provider, host);
     });
   } catch (e) {
     return false;
@@ -423,8 +427,7 @@ function isProviderHostPage() {
   const host = window.location.hostname.toLowerCase();
   return (settings.providers || []).some((provider) => {
     if (!provider?.enabled) return false;
-    const needle = String(provider.hostContains || "").toLowerCase();
-    return needle && host.includes(needle);
+    return _providerHostMatch(provider, host);
   });
 }
 

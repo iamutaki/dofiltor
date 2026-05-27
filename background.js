@@ -63,13 +63,13 @@ async function sendRuntimeMessageSafe(payload) {
 }
 
 const CSV_COLUMNS = ["url", "file_type", "query", "source_page", "discovered_at", "size"];
-importScripts("file-types.js", "dork-utils.js", "provider-utils.js", "activity-log.js");
+importScripts("glob-match.js", "file-types.js", "dork-utils.js", "provider-utils.js", "activity-log.js");
 const DEFAULT_PROVIDERS = [
-  { id: "google", name: "Google", enabled: true, hostContains: "google.", pathContains: "/search", queryParam: "q", nextSelector: "#pnnext, a#pnnext, a[aria-label=\"Next page\"], a[aria-label=\"Halaman berikutnya\"]" },
-  { id: "bing", name: "Bing", enabled: true, hostContains: "bing.com", pathContains: "/search", queryParam: "q", nextSelector: "a.sb_pagN" },
-  { id: "duckduckgo", name: "DuckDuckGo", enabled: true, hostContains: "duckduckgo.com", pathContains: "/", queryParam: "q", nextSelector: "a[rel='next']" },
-  { id: "yahoo", name: "Yahoo", enabled: false, hostContains: "search.yahoo.com", pathContains: "/search", queryParam: "p", nextSelector: "a.next" },
-  { id: "yandex", name: "Yandex", enabled: false, hostContains: "yandex.", pathContains: "/search", queryParam: "text", nextSelector: "a[aria-label='Next page']" },
+  { id: "google", name: "Google", enabled: true, hostPattern: "**.google.**", hostContains: "google.", pathContains: "/search", queryParam: "q", nextSelector: "#pnnext, a#pnnext, a[aria-label=\"Next page\"], a[aria-label=\"Halaman berikutnya\"]" },
+  { id: "bing", name: "Bing", enabled: true, hostPattern: "**.bing.com", hostContains: "bing.com", pathContains: "/search", queryParam: "q", nextSelector: "a.sb_pagN" },
+  { id: "duckduckgo", name: "DuckDuckGo", enabled: true, hostPattern: "**.duckduckgo.com", hostContains: "duckduckgo.com", pathContains: "/", queryParam: "q", nextSelector: "a[rel='next']" },
+  { id: "yahoo", name: "Yahoo", enabled: false, hostPattern: "**.search.yahoo.com", hostContains: "search.yahoo.com", pathContains: "/search", queryParam: "p", nextSelector: "a.next" },
+  { id: "yandex", name: "Yandex", enabled: false, hostPattern: "**.yandex.**", hostContains: "yandex.", pathContains: "/search", queryParam: "text", nextSelector: "a[aria-label='Next page']" },
 ];
 const STATIC_PROVIDER_HOSTS = new Set([
   "google.com", "google.co.id", "bing.com", "duckduckgo.com",
@@ -674,21 +674,11 @@ function runSettingsMigration() {
 }
 
 function providerHostBase(hostContains) {
-  return String(hostContains || "")
-    .trim()
-    .toLowerCase()
-    .replace(/^https?:\/\//, "")
-    .replace(/^\*:\/\//, "")
-    .replace(/^\*\./, "")
-    .replace(/^\./, "")
-    .replace(/\/.*$/, "")
-    .replace(/:\d+$/, "")
-    .replace(/[^a-z0-9.-]/g, "")
-    .replace(/^\.+|\.+$/g, "");
+  return hostBaseFromPattern(hostContains);
 }
 
 function providerMatchPatterns(provider) {
-  const host = providerHostBase(provider.hostContains);
+  const host = providerHostBase(provider.hostPattern || provider.hostContains);
   if (!host || !host.includes(".") || host.endsWith(".")) return [];
   return [
     "http://" + host + "/*",
@@ -701,7 +691,7 @@ function providerMatchPatterns(provider) {
 function customProviderMatches(providers) {
   const matches = [];
   for (const provider of Array.isArray(providers) ? providers : []) {
-    const host = providerHostBase(provider.hostContains);
+    const host = providerHostBase(provider.hostPattern || provider.hostContains);
     if (!provider.enabled || STATIC_PROVIDER_HOSTS.has(host)) continue;
     // Full host wildcard — includes /search, /sorry, and other challenge paths on custom domains.
     matches.push(...providerMatchPatterns(provider));

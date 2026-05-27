@@ -124,16 +124,47 @@
     .scope-bar.collecting .scope-dot { background: var(--c-green); }
     .scope-bar.duplicate .scope-dot { background: var(--c-orange); }
     .scope-bar.paused .scope-dot { background: var(--c-orange); }
-    .scope-bar.unsupported .scope-dot,
-    .scope-bar.permission .scope-dot,
+    .scope-bar.unsupported .scope-dot { background: var(--c-text-3); }
+    .scope-bar.permission {
+      background: #fff8e1;
+      border-top-color: #f7d58b;
+      border-bottom-color: #f7d58b;
+    }
+    .scope-bar.permission .scope-dot { background: var(--c-orange); }
+    .scope-bar.permission #scopeText { color: #b06000; font-weight: 500; }
     .scope-bar.stale .scope-dot { background: var(--c-red); }
+    [data-theme="dark"] .scope-bar.permission {
+      background: #332800;
+      border-top-color: #5f4b16;
+      border-bottom-color: #5f4b16;
+    }
+    [data-theme="dark"] .scope-bar.permission #scopeText { color: #fdd663; }
+    @media (prefers-color-scheme: dark) {
+      [data-theme="auto"] .scope-bar.permission {
+        background: #332800;
+        border-top-color: #5f4b16;
+        border-bottom-color: #5f4b16;
+      }
+      [data-theme="auto"] .scope-bar.permission #scopeText { color: #fdd663; }
+    }
     #scopeText {
       flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
-    .scope-reload-btn {
-      flex-shrink: 0; padding: 2px 8px; border: 1px solid var(--c-red); border-radius: 3px;
-      background: transparent; color: var(--c-red); cursor: pointer;
+    .scope-action-btn {
+      flex-shrink: 0; padding: 2px 8px; border-radius: 3px;
+      background: transparent; cursor: pointer;
       font-size: 10px; font-weight: 500;
+    }
+    .scope-grant-btn {
+      border: 1px solid var(--c-orange); color: #b06000;
+    }
+    .scope-grant-btn:hover { background: var(--c-orange); color: #fff; }
+    [data-theme="dark"] .scope-grant-btn { color: #fdd663; }
+    @media (prefers-color-scheme: dark) {
+      [data-theme="auto"] .scope-grant-btn { color: #fdd663; }
+    }
+    .scope-reload-btn {
+      border: 1px solid var(--c-red); color: var(--c-red);
     }
     .scope-reload-btn:hover { background: var(--c-red); color: #fff; }
     .pwr-btn {
@@ -764,7 +795,8 @@
   <div class="scope-bar" id="scopeBar">
     <span class="scope-dot"></span>
     <span id="scopeText" data-i18n="scopeUnknown">Checking current tab...</span>
-    <button type="button" class="scope-reload-btn" id="scopeReloadBtn" hidden data-i18n="scopeReloadTab">Reload tab</button>
+    <button type="button" class="scope-action-btn scope-grant-btn" id="scopeGrantBtn" hidden data-i18n="scopeGrantAccess">Setup</button>
+    <button type="button" class="scope-action-btn scope-reload-btn" id="scopeReloadBtn" hidden data-i18n="scopeReloadTab">Reload</button>
   </div>
 
   <div class="auto-bar">
@@ -942,6 +974,7 @@
 
   <script>window.__DOFILTOR_UI_VERSION__ = "3.5.3";</script>
   <script src="i18n.js"></script>
+  <script src="glob-match.js"></script>
   <script src="file-types.js"></script>
   <script src="dork-utils.js"></script>
   <script src="ui-panel.js"></script>

@@ -53,6 +53,7 @@
         "https://www.yandex.ru/search*"
       ],
       "js": [
+        "glob-match.js",
         "file-types.js",
         "dork-utils.js",
         "visited-logic.js",

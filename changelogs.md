@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **UI** — Scope bar “permission” state uses amber (setup) instead of red; **Setup** shortcut; copy is “enable in settings”, not grant/needs-access (avoids sounding like a re-confirmation).
 - **Fix** — CAPTCHA side-panel banner now hides when the challenge clears (storage removal / `CAPTCHA_RESOLVED`); resume countdown still shows the blue banner, then dismisses when finished.
 - **Fix** — Capture URLs without a file extension when the search engine shows a type chip (e.g. Google `PDF` badge on `/url?q=` links); shared helpers in `file-types.js`.
 - **Fix** — Background no longer logs `Could not establish connection` when the side panel is closed (runtime broadcasts use a safe helper with callback + promise catch).
