@@ -14,6 +14,124 @@ const BULK_DORK_KEY = "dofiltor_bulk_dork";
 const CAPTCHA_COUNTDOWN_KEY = "dofiltor_captcha_countdown";
 const AUTO_NEXT_DELAY_KEY = "dofiltor_auto_next_delay";
 const DORK_TEMPLATES_KEY = "dofiltor_dork_templates";
+const DORK_TEMPLATES_VERSION_KEY = "dofiltor_dork_templates_version";
+const DORK_TEMPLATES_VERSION = 1;
+
+const DEFAULT_DORK_TEMPLATES = [
+  {
+    id: "tpl_osint_gov_pdf",
+    name: "Dokumen Pemerintah (PDF)",
+    query: 'site:go.id filetype:pdf',
+    category: "osint",
+  },
+  {
+    id: "tpl_osint_ac_pdf",
+    name: "Dokumen Akademik (PDF)",
+    query: 'site:ac.id filetype:pdf',
+    category: "osint",
+  },
+  {
+    id: "tpl_osint_kemdikbud_data",
+    name: "Data Kemdikbud",
+    query: 'site:kemdikbud.go.id filetype:xlsx OR filetype:xls',
+    category: "osint",
+  },
+  {
+    id: "tpl_osint_open_dir",
+    name: "Open Directory",
+    query: 'intitle:"index of" filetype:pdf',
+    category: "osint",
+  },
+  {
+    id: "tpl_osint_xlsx_gov",
+    name: "Spreadsheet Pemerintah",
+    query: 'site:go.id filetype:xlsx OR filetype:xls',
+    category: "osint",
+  },
+  {
+    id: "tpl_osint_bumn_report",
+    name: "Laporan BUMN",
+    query: 'site:*.co.id filetype:pdf "laporan tahunan" OR "annual report"',
+    category: "osint",
+  },
+  {
+    id: "tpl_osint_pptx_edu",
+    name: "Presentasi Akademik",
+    query: 'site:ac.id filetype:pptx OR filetype:ppt',
+    category: "osint",
+  },
+  {
+    id: "tpl_osint_exposed_doc",
+    name: "Dokumen Exposed",
+    query: 'filetype:doc "confidential" OR "rahasia" OR "not for distribution"',
+    category: "osint",
+  },
+  {
+    id: "tpl_osint_csv_data",
+    name: "Dataset CSV",
+    query: 'filetype:csv "data" site:go.id OR site:ac.id',
+    category: "osint",
+  },
+  {
+    id: "tpl_osint_db_dump",
+    name: "Database Dump",
+    query: 'filetype:sql "INSERT INTO" OR "CREATE TABLE"',
+    category: "osint",
+  },
+  {
+    id: "tpl_osint_env_exposed",
+    name: "Config Exposed",
+    query: 'filetype:env "DB_PASSWORD" OR filetype:yml "password:" -site:github.com',
+    category: "osint",
+  },
+  {
+    id: "tpl_osint_log_files",
+    name: "Log Files",
+    query: 'filetype:log "error" OR "warning" intitle:"index of"',
+    category: "osint",
+  },
+  {
+    id: "tpl_osint_doc_indo",
+    name: "Dokumen Indonesia (All)",
+    query: 'site:id filetype:pdf OR filetype:docx OR filetype:xlsx',
+    category: "osint",
+  },
+  {
+    id: "tpl_osint_bappenas",
+    name: "Dokumen Bappenas",
+    query: 'site:bappenas.go.id filetype:pdf OR filetype:xlsx',
+    category: "osint",
+  },
+  {
+    id: "tpl_osint_ojk",
+    name: "Dokumen OJK",
+    query: 'site:ojk.go.id filetype:pdf "regulasi" OR "peraturan"',
+    category: "osint",
+  },
+];
+
+function seedDefaultTemplates() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get([DORK_TEMPLATES_KEY, DORK_TEMPLATES_VERSION_KEY], (res) => {
+      const currentVersion = res[DORK_TEMPLATES_VERSION_KEY] || 0;
+      if (currentVersion >= DORK_TEMPLATES_VERSION) { resolve(); return; }
+      const existing = res[DORK_TEMPLATES_KEY] || [];
+      const existingIds = new Set(existing.map((t) => t.id));
+      const defaults = DEFAULT_DORK_TEMPLATES.filter((t) => !existingIds.has(t.id));
+      if (!defaults.length) {
+        chrome.storage.local.set({ [DORK_TEMPLATES_VERSION_KEY]: DORK_TEMPLATES_VERSION }, resolve);
+        return;
+      }
+      const now = new Date().toISOString();
+      const seeded = defaults.map((t) => ({ ...t, createdAt: now, updatedAt: now }));
+      const merged = [...seeded, ...existing];
+      chrome.storage.local.set({
+        [DORK_TEMPLATES_KEY]: merged,
+        [DORK_TEMPLATES_VERSION_KEY]: DORK_TEMPLATES_VERSION,
+      }, resolve);
+    });
+  });
+}
 
 function showExtensionNotification(id, options, settings) {
   if (!settings || !settings.notifications) return;
@@ -727,11 +845,13 @@ function initSidePanel() {
 chrome.runtime.onInstalled.addListener(() => {
   initSidePanel();
   runSettingsMigration().then(syncDynamicContentScripts);
+  seedDefaultTemplates();
 });
 
 chrome.runtime.onStartup.addListener(() => {
   initSidePanel();
   runSettingsMigration().then(syncDynamicContentScripts);
+  seedDefaultTemplates();
 });
 
 // --- Download tracking ---
