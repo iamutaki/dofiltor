@@ -1,5 +1,5 @@
 /**
- * Content script — Dork File Collector v3.5.0 (dofiltor)
+ * Content script — Dork File Collector v3.6.0 (dofiltor)
  * Runs on configured dork/search result pages.
  * Extracts document URLs, auto-next page, and handles CAPTCHA detection.
  */

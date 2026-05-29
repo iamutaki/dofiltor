@@ -1,4 +1,4 @@
-// ui-panel.js — Dork File Collector v3.5.3 (dofiltor) — side panel UI
+// ui-panel.js — Dork File Collector v3.6.0 (dofiltor) — side panel UI
 
 const STORAGE_KEY = "dofiltor_urls";
 const SETTINGS_KEY = "dofiltor_settings";
@@ -344,6 +344,9 @@ function setScopeActionButtons({ grant, reload }) {
 function hasProviderPermission(provider) {
   const host = providerHostBase(provider.hostContains);
   if (STATIC_PROVIDER_HOSTS.has(host)) return Promise.resolve(true);
+  for (const sh of STATIC_PROVIDER_HOSTS) {
+    if (sh === host || sh.endsWith("." + host) || host.endsWith("." + sh)) return Promise.resolve(true);
+  }
   const origins = providerOrigins(provider);
   if (!origins.length || typeof chrome === "undefined" || !chrome.permissions?.contains) return Promise.resolve(false);
   return new Promise((resolve) => chrome.permissions.contains({ origins }, resolve));
@@ -865,15 +868,6 @@ function renderRow(item, viewIndex) {
     refresh();
   }));
   acts.appendChild(mkBtn(SVG.edit, "Tag", "", () => openTagDialog(item)));
-    const removed = allUrls.splice(idx, 1);
-    await saveUrls(allUrls);
-    showUndo("Removed 1 URL", async () => {
-      allUrls.splice(idx, 0, removed[0]);
-      await saveUrls(allUrls);
-      refresh();
-    });
-    refresh();
-  }));
   row.appendChild(acts);
   return row;
 }
@@ -1049,7 +1043,11 @@ function makeExport(items, format) {
   if (format === "txt") return new Blob([items.map((u) => u.url).join("\n")], { type: "text/plain;charset=utf-8" });
   if (format === "json") return new Blob([JSON.stringify(items, null, 2)], { type: "application/json;charset=utf-8" });
   if (format === "xlsx") return makeXlsx(items);
-  const csv = CSV_COLUMNS.map(escapeCSV).join(",") + "\n" + items.map((u) => CSV_COLUMNS.map((c) => escapeCSV(u[c])).join(",")).join("\n");
+  const getCol = (u, c) => {
+    if (c === "tags") return Array.isArray(u[c]) ? u[c].join(";") : (u[c] || "");
+    return u[c] || "";
+  };
+  const csv = CSV_COLUMNS.map(escapeCSV).join(",") + "\n" + items.map((u) => CSV_COLUMNS.map((c) => escapeCSV(getCol(u, c))).join(",")).join("\n");
   return new Blob([csv], { type: "text/csv;charset=utf-8" });
 }
 function exportCurrent() {
@@ -1401,13 +1399,7 @@ function renderAutoNextDelay(payload) {
   }
   el.textContent = t("delayNextIn", { seconds: String(payload.secondsLeft) });
 }
-    $("autoStatus").textContent = status.message || t("autoNextStuck");
-  } else if (!enabled && status && (status.status === "done" || status.status === "end")) {
-    $("autoStatus").textContent = status.message || "Stopped";
-  } else {
-    $("autoStatus").textContent = "";
-  }
-}
+
 async function toggleAutoNext() {
   await syncSettings();
   autoNextEnabled = !autoNextEnabled;
@@ -1620,6 +1612,7 @@ function renderTemplateList(templates) {
       if (input && tpl.query) {
         input.value = input.value ? input.value + "\n" + tpl.query : tpl.query;
         try { localStorage.setItem("dofiltor_bulk_text", input.value); } catch (e2) { /* ignore */ }
+        setBulkPanelOpen(true);
         setStatus(t("templateLoaded", { name: tpl.name }));
       }
     });
@@ -1643,7 +1636,10 @@ function renderTemplateList(templates) {
 }
 
 async function refreshTemplatePanel() {
-  const templates = await sendMessage({ type: "GET_DORK_TEMPLATES" });
+  let templates = await sendMessage({ type: "GET_DORK_TEMPLATES" });
+  if (!Array.isArray(templates) || !templates.length) {
+    templates = await sendMessage({ type: "SEED_DEFAULT_TEMPLATES" });
+  }
   renderTemplateList(Array.isArray(templates) ? templates : []);
 }
 

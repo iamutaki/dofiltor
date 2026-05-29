@@ -1,4 +1,4 @@
-// background.js — Dork File Collector v3.5.0 (dofiltor)
+// background.js — Dork File Collector v3.6.0 (dofiltor)
 
 const STORAGE_KEY = "dofiltor_urls";
 const SETTINGS_KEY = "dofiltor_settings";
@@ -182,7 +182,7 @@ async function sendRuntimeMessageSafe(payload) {
   }
 }
 
-const CSV_COLUMNS = ["url", "file_type", "query", "source_page", "discovered_at", "size"];
+const CSV_COLUMNS = ["url", "file_type", "query", "source_page", "discovered_at", "size", "status", "tags", "note"];
 importScripts("glob-match.js", "file-types.js", "dork-utils.js", "provider-utils.js", "activity-log.js");
 const DEFAULT_PROVIDERS = [
   { id: "google", name: "Google", enabled: true, hostPattern: "**.google.**", hostContains: "google.", pathContains: "/search", queryParam: "q", nextSelector: "#pnnext, a#pnnext, a[aria-label=\"Next page\"], a[aria-label=\"Halaman berikutnya\"]" },
@@ -496,8 +496,12 @@ function toCSV(urls) {
     }
     return s;
   };
+  const getCol = (u, c) => {
+    if (c === "tags") return Array.isArray(u[c]) ? u[c].join(";") : (u[c] || "");
+    return u[c] || "";
+  };
   const header = CSV_COLUMNS.map(escape).join(",");
-  const rows = urls.map((u) => CSV_COLUMNS.map((c) => escape(u[c])).join(","));
+  const rows = urls.map((u) => CSV_COLUMNS.map((c) => escape(getCol(u, c))).join(","));
   return header + "\n" + rows.join("\n");
 }
 
@@ -1295,6 +1299,15 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === "GET_DORK_TEMPLATES") {
     chrome.storage.local.get(DORK_TEMPLATES_KEY, (res) => {
       sendResponse(res[DORK_TEMPLATES_KEY] || []);
+    });
+    return true;
+  }
+
+  if (msg.type === "SEED_DEFAULT_TEMPLATES") {
+    seedDefaultTemplates().then(() => {
+      chrome.storage.local.get(DORK_TEMPLATES_KEY, (res) => {
+        sendResponse(res[DORK_TEMPLATES_KEY] || []);
+      });
     });
     return true;
   }
