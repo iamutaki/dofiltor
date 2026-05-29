@@ -185,11 +185,11 @@ async function sendRuntimeMessageSafe(payload) {
 const CSV_COLUMNS = ["url", "file_type", "query", "source_page", "discovered_at", "size", "status", "tags", "note"];
 importScripts("glob-match.js", "file-types.js", "dork-utils.js", "provider-utils.js", "activity-log.js");
 const DEFAULT_PROVIDERS = [
-  { id: "google", name: "Google", enabled: true, hostPattern: "**.google.**", hostContains: "google.", pathContains: "/search", queryParam: "q", nextSelector: "#pnnext, a#pnnext, a[aria-label=\"Next page\"], a[aria-label=\"Halaman berikutnya\"]" },
-  { id: "bing", name: "Bing", enabled: true, hostPattern: "**.bing.com", hostContains: "bing.com", pathContains: "/search", queryParam: "q", nextSelector: "a.sb_pagN" },
-  { id: "duckduckgo", name: "DuckDuckGo", enabled: true, hostPattern: "**.duckduckgo.com", hostContains: "duckduckgo.com", pathContains: "/", queryParam: "q", nextSelector: "a[rel='next']" },
-  { id: "yahoo", name: "Yahoo", enabled: false, hostPattern: "**.search.yahoo.com", hostContains: "search.yahoo.com", pathContains: "/search", queryParam: "p", nextSelector: "a.next" },
-  { id: "yandex", name: "Yandex", enabled: false, hostPattern: "**.yandex.**", hostContains: "yandex.", pathContains: "/search", queryParam: "text", nextSelector: "a[aria-label='Next page']" },
+  { id: "google", name: "Google", enabled: true, hostPattern: "**.google.**", pathContains: "/search", queryParam: "q", nextSelector: "#pnnext, a#pnnext, a[aria-label=\"Next page\"], a[aria-label=\"Halaman berikutnya\"]" },
+  { id: "bing", name: "Bing", enabled: true, hostPattern: "**.bing.com", pathContains: "/search", queryParam: "q", nextSelector: "a.sb_pagN" },
+  { id: "duckduckgo", name: "DuckDuckGo", enabled: true, hostPattern: "**.duckduckgo.com", pathContains: "/", queryParam: "q", nextSelector: "a[rel='next']" },
+  { id: "yahoo", name: "Yahoo", enabled: false, hostPattern: "**.search.yahoo.com", pathContains: "/search", queryParam: "p", nextSelector: "a.next" },
+  { id: "yandex", name: "Yandex", enabled: false, hostPattern: "**.yandex.**", pathContains: "/search", queryParam: "text", nextSelector: "a[aria-label='Next page']" },
 ];
 const STATIC_PROVIDER_HOSTS = new Set([
   "google.com", "google.co.id", "bing.com", "duckduckgo.com",
@@ -751,10 +751,20 @@ function resolveSettings(stored) {
   const migration = migrateFileTypes(raw.fileTypes, raw.fileTypesVersion);
   const providers = Array.isArray(raw.providers) && raw.providers.length ? raw.providers : DEFAULT_PROVIDERS;
   const migratedProviders = providers.map((provider) => {
-    if (provider?.id === "google" && provider.nextSelector === "#pnnext") {
-      return { ...provider, nextSelector: DEFAULT_PROVIDERS[0].nextSelector };
+    let p = provider;
+    if (p.hostContains && !p.hostPattern) {
+      const h = p.hostContains.replace(/^\.+|\.+$/g, "");
+      p = { ...p, hostPattern: h.includes(".") ? "**." + h : "**." + h + ".**" };
     }
-    return provider;
+    if (p.hostContains) {
+      const clean = { ...p };
+      delete clean.hostContains;
+      p = clean;
+    }
+    if (p?.id === "google" && p.nextSelector === "#pnnext") {
+      return { ...p, nextSelector: DEFAULT_PROVIDERS[0].nextSelector };
+    }
+    return p;
   });
   const providersChanged = migratedProviders.some((provider, index) => provider !== providers[index]);
   return {
@@ -797,12 +807,12 @@ function runSettingsMigration() {
   return getSettings();
 }
 
-function providerHostBase(hostContains) {
-  return hostBaseFromPattern(hostContains);
+function providerHostBase(hostPattern) {
+  return hostBaseFromPattern(hostPattern || "");
 }
 
 function providerMatchPatterns(provider) {
-  const host = providerHostBase(provider.hostPattern || provider.hostContains);
+  const host = providerHostBase(provider.hostPattern);
   if (!host || !host.includes(".") || host.endsWith(".")) return [];
   return [
     "http://" + host + "/*",
@@ -812,11 +822,20 @@ function providerMatchPatterns(provider) {
   ];
 }
 
+function isStaticProvider(provider) {
+  const pattern = provider.hostPattern;
+  if (!pattern) return false;
+  for (const sh of STATIC_PROVIDER_HOSTS) {
+    if (hostMatchesGlob(sh, pattern)) return true;
+  }
+  return false;
+}
+
 function customProviderMatches(providers) {
   const matches = [];
   for (const provider of Array.isArray(providers) ? providers : []) {
-    const host = providerHostBase(provider.hostPattern || provider.hostContains);
-    if (!provider.enabled || STATIC_PROVIDER_HOSTS.has(host)) continue;
+    const host = providerHostBase(provider.hostPattern);
+    if (!provider.enabled || isStaticProvider(provider) || (host && STATIC_PROVIDER_HOSTS.has(host))) continue;
     // Full host wildcard — includes /search, /sorry, and other challenge paths on custom domains.
     matches.push(...providerMatchPatterns(provider));
   }

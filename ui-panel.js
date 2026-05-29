@@ -39,11 +39,11 @@ const DEFAULT_SETTINGS = {
   dorkHistoryMax: 200,
   fileTypes: DEFAULT_FILE_TYPES,
   providers: [
-    { id: "google", name: "Google", enabled: true, hostPattern: "**.google.**", hostContains: "google.", pathContains: "/search", queryParam: "q", nextSelector: "#pnnext, a#pnnext, a[aria-label=\"Next page\"], a[aria-label=\"Halaman berikutnya\"]" },
-    { id: "bing", name: "Bing", enabled: true, hostPattern: "**.bing.com", hostContains: "bing.com", pathContains: "/search", queryParam: "q", nextSelector: "a.sb_pagN" },
-    { id: "duckduckgo", name: "DuckDuckGo", enabled: true, hostPattern: "**.duckduckgo.com", hostContains: "duckduckgo.com", pathContains: "/", queryParam: "q", nextSelector: "a[rel='next']" },
-    { id: "yahoo", name: "Yahoo", enabled: false, hostPattern: "**.search.yahoo.com", hostContains: "search.yahoo.com", pathContains: "/search", queryParam: "p", nextSelector: "a.next" },
-    { id: "yandex", name: "Yandex", enabled: false, hostPattern: "**.yandex.**", hostContains: "yandex.", pathContains: "/search", queryParam: "text", nextSelector: "a[aria-label='Next page']" },
+    { id: "google", name: "Google", enabled: true, hostPattern: "**.google.**", pathContains: "/search", queryParam: "q", nextSelector: "#pnnext, a#pnnext, a[aria-label=\"Next page\"], a[aria-label=\"Halaman berikutnya\"]" },
+    { id: "bing", name: "Bing", enabled: true, hostPattern: "**.bing.com", pathContains: "/search", queryParam: "q", nextSelector: "a.sb_pagN" },
+    { id: "duckduckgo", name: "DuckDuckGo", enabled: true, hostPattern: "**.duckduckgo.com", pathContains: "/", queryParam: "q", nextSelector: "a[rel='next']" },
+    { id: "yahoo", name: "Yahoo", enabled: false, hostPattern: "**.search.yahoo.com", pathContains: "/search", queryParam: "p", nextSelector: "a.next" },
+    { id: "yandex", name: "Yandex", enabled: false, hostPattern: "**.yandex.**", pathContains: "/search", queryParam: "text", nextSelector: "a[aria-label='Next page']" },
   ],
 };
 const STATIC_PROVIDER_HOSTS = new Set([
@@ -201,6 +201,15 @@ function saveUrls(urls) {
   if (!hasChromeStorage()) return Promise.resolve(next);
   return sendMessage({ type: "SET_URLS", urls: next }).then(() => next);
 }
+function migrateProvider(p) {
+  if (p.hostContains && !p.hostPattern) {
+    const h = p.hostContains.replace(/^\.+|\.+$/g, "");
+    p.hostPattern = h.includes(".") ? "**." + h : "**." + h + ".**";
+  }
+  delete p.hostContains;
+  return p;
+}
+
 function loadSettings() {
   if (!hasChromeStorage()) return Promise.resolve({ ...DEFAULT_SETTINGS });
   return new Promise((r) => chrome.storage.local.get(SETTINGS_KEY, (res) => {
@@ -211,7 +220,9 @@ function loadSettings() {
       ...stored,
       fileTypes: migration.fileTypes,
       fileTypesVersion: migration.fileTypesVersion,
-      providers: Array.isArray(stored.providers) && stored.providers.length ? stored.providers : DEFAULT_SETTINGS.providers,
+      providers: Array.isArray(stored.providers) && stored.providers.length
+        ? stored.providers.map(migrateProvider)
+        : DEFAULT_SETTINGS.providers,
     });
   }));
 }
@@ -254,21 +265,11 @@ function dedupeUrls(urls) {
   }
   return clean;
 }
-function providerHostBase(hostContains) {
-  return String(hostContains || "")
-    .trim()
-    .toLowerCase()
-    .replace(/^https?:\/\//, "")
-    .replace(/^\*:\/\//, "")
-    .replace(/^\*\./, "")
-    .replace(/^\./, "")
-    .replace(/\/.*$/, "")
-    .replace(/:\d+$/, "")
-    .replace(/[^a-z0-9.-]/g, "")
-    .replace(/^\.+|\.+$/g, "");
+function providerHostBase(hostPattern) {
+  return hostBaseFromPattern(hostPattern || "");
 }
 function providerOrigins(provider) {
-  const host = providerHostBase(provider.hostContains);
+  const host = providerHostBase(provider.hostPattern);
   if (!host || !host.includes(".") || host.endsWith(".")) return [];
   return [
     "http://" + host + "/*",
@@ -280,10 +281,10 @@ function providerOrigins(provider) {
 function providerMatchesUrl(provider, url) {
   try {
     const parsed = new URL(url);
-    const hostNeedle = String(provider.hostContains || "").toLowerCase();
+    const hostNeedle = String(provider.hostPattern || "").toLowerCase();
     const pathNeedle = String(provider.pathContains || "").toLowerCase();
     return provider.enabled &&
-      (!hostNeedle || parsed.hostname.toLowerCase().includes(hostNeedle)) &&
+      (!hostNeedle || hostMatchesGlob(parsed.hostname.toLowerCase(), hostNeedle)) &&
       (!pathNeedle || parsed.pathname.toLowerCase().includes(pathNeedle));
   } catch (e) {
     return false;
@@ -341,11 +342,22 @@ function setScopeActionButtons({ grant, reload }) {
   if (grantBtn) grantBtn.hidden = !grant;
   if (reloadBtn) reloadBtn.hidden = !reload;
 }
-function hasProviderPermission(provider) {
-  const host = providerHostBase(provider.hostContains);
-  if (STATIC_PROVIDER_HOSTS.has(host)) return Promise.resolve(true);
+function isStaticProvider(provider) {
+  const pattern = provider.hostPattern;
+  if (!pattern) return false;
   for (const sh of STATIC_PROVIDER_HOSTS) {
-    if (sh === host || sh.endsWith("." + host) || host.endsWith("." + sh)) return Promise.resolve(true);
+    if (hostMatchesGlob(sh, pattern)) return true;
+  }
+  return false;
+}
+
+function hasProviderPermission(provider) {
+  if (isStaticProvider(provider)) return Promise.resolve(true);
+  const host = providerHostBase(provider.hostPattern);
+  if (host) {
+    for (const sh of STATIC_PROVIDER_HOSTS) {
+      if (sh === host || sh.endsWith("." + host) || host.endsWith("." + sh)) return Promise.resolve(true);
+    }
   }
   const origins = providerOrigins(provider);
   if (!origins.length || typeof chrome === "undefined" || !chrome.permissions?.contains) return Promise.resolve(false);
@@ -534,15 +546,7 @@ function updateStats() {
   $("sFail").textContent = ok || fail || checkingCount ? fail : "\u2014";
   $("sTypes").textContent = types;
   $("btnRemoveDead").style.display = fail > 0 ? "flex" : "none";
-  $("btnSelectDead").style.display = fail > 0 ? "flex" : "none";
-  if (fail > 0) {
-    $("deadBadge").textContent = fail;
-    $("deadBadge").style.display = "block";
-  } else {
-    $("deadBadge").style.display = "none";
-  }
   const pending = n - ok - fail - checkingCount;
-  $("btnSelectPending").style.display = pending > 0 ? "flex" : "none";
   $("fRight").textContent = n + " URLs" + (downloaded ? " \u00B7 " + downloaded + " downloaded" : "");
 
   const batchable = allUrls.filter((u) => u.status === "ok" && !u.downloaded).length;
@@ -1118,14 +1122,6 @@ async function removeDead() {
     refresh();
   });
   refresh();
-}
-function selectByStatus(status) {
-  const items = allUrls.filter((u) => u.status === status);
-  for (const item of items) selectedUrls.add(item.url);
-  selectedIndex = items.length ? 0 : -1;
-  updateSelectionAction();
-  renderList();
-  setStatus(t("selectedCount", { n: selectedUrls.size }));
 }
 async function removeSelected() {
   if (!selectedUrls.size) return;
@@ -2076,8 +2072,6 @@ function initPopupUi() {
   bindClick("btnBatchDl", batchDownload);
   bindClick("btnHistory", showHistory);
   bindClick("btnRemoveDead", removeDead);
-  bindClick("btnSelectDead", () => selectByStatus("fail"));
-  bindClick("btnSelectPending", () => selectByStatus("pending"));
   bindClick("btnClear", clearAll);
   bindClick("btnSettings", toggleSettingsPanel);
   bindChange("sortKey", syncSort);
@@ -2147,8 +2141,11 @@ function initPopupUi() {
   bindClick("captchaShow", () => {
     if (!hasChromeTabs()) return;
     const patterns = (settings.providers || [])
-      .filter((provider) => provider.enabled && provider.hostContains)
-      .map((provider) => "*://*" + provider.hostContains.replace(/^\*?\./, "") + "/*");
+      .filter((provider) => provider.enabled && provider.hostPattern)
+      .map((provider) => {
+        const base = hostBaseFromPattern(provider.hostPattern);
+        return base ? "*://*." + base + "/*" : "";
+      }).filter(Boolean);
     chrome.tabs.query({ url: patterns.length ? patterns : ["<all_urls>"] }, (tabs) => {
       if (tabs.length) {
         chrome.tabs.update(tabs[0].id, { active: true });

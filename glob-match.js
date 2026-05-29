@@ -104,7 +104,7 @@ function hostMatchesGlob(hostname, pattern) {
  * Returns empty string when no concrete domain can be extracted
  * (e.g. multi-TLD patterns like **.google.**).
  *
- * @param {string} pattern  hostPattern or hostContains value
+ * @param {string} pattern  hostPattern glob value
  * @returns {string} e.g. "search.yahoo.com" or ""
  */
 function hostBaseFromPattern(pattern) {

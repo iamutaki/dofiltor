@@ -5,11 +5,11 @@
  */
 
 const DEFAULT_PROVIDERS = [
-  { id: "google", name: "Google", enabled: true, hostPattern: "**.google.**", hostContains: "google.", pathContains: "/search", queryParam: "q", nextSelector: "#pnnext, a#pnnext, a[aria-label=\"Next page\"], a[aria-label=\"Halaman berikutnya\"]" },
-  { id: "bing", name: "Bing", enabled: true, hostPattern: "**.bing.com", hostContains: "bing.com", pathContains: "/search", queryParam: "q", nextSelector: "a.sb_pagN" },
-  { id: "duckduckgo", name: "DuckDuckGo", enabled: true, hostPattern: "**.duckduckgo.com", hostContains: "duckduckgo.com", pathContains: "/", queryParam: "q", nextSelector: "a[rel='next']" },
-  { id: "yahoo", name: "Yahoo", enabled: false, hostPattern: "**.search.yahoo.com", hostContains: "search.yahoo.com", pathContains: "/search", queryParam: "p", nextSelector: "a.next" },
-  { id: "yandex", name: "Yandex", enabled: false, hostPattern: "**.yandex.**", hostContains: "yandex.", pathContains: "/search", queryParam: "text", nextSelector: "a[aria-label='Next page']" },
+  { id: "google", name: "Google", enabled: true, hostPattern: "**.google.**", pathContains: "/search", queryParam: "q", nextSelector: "#pnnext, a#pnnext, a[aria-label=\"Next page\"], a[aria-label=\"Halaman berikutnya\"]" },
+  { id: "bing", name: "Bing", enabled: true, hostPattern: "**.bing.com", pathContains: "/search", queryParam: "q", nextSelector: "a.sb_pagN" },
+  { id: "duckduckgo", name: "DuckDuckGo", enabled: true, hostPattern: "**.duckduckgo.com", pathContains: "/", queryParam: "q", nextSelector: "a[rel='next']" },
+  { id: "yahoo", name: "Yahoo", enabled: false, hostPattern: "**.search.yahoo.com", pathContains: "/search", queryParam: "p", nextSelector: "a.next" },
+  { id: "yandex", name: "Yandex", enabled: false, hostPattern: "**.yandex.**", pathContains: "/search", queryParam: "text", nextSelector: "a[aria-label='Next page']" },
 ];
 
 const SETTINGS_KEY = "dofiltor_settings";
@@ -28,6 +28,7 @@ let settings = {
   providers: DEFAULT_PROVIDERS,
 };
 let captchaDetected = false;
+let captchaClearSent = false;
 let autoNextActive = false;
 let nextTimer = null;
 let navigationWatchTimer = null;
@@ -90,13 +91,24 @@ function shutdown() {
 
 // --- Settings ---
 
+function migrateProvider(p) {
+  if (p.hostContains && !p.hostPattern) {
+    const h = p.hostContains.replace(/^\.+|\.+$/g, "");
+    p.hostPattern = h.includes(".") ? "**." + h : "**." + h + ".**";
+  }
+  delete p.hostContains;
+  return p;
+}
+
 function loadSettings() {
   return new Promise((r) => {
     try {
       chrome.storage.local.get(SETTINGS_KEY, (res) => {
         if (chrome.runtime.lastError) { r(settings); return; }
         if (res[SETTINGS_KEY]) {
-          settings = normalizeSettings({ ...settings, ...res[SETTINGS_KEY] });
+          const raw = { ...res[SETTINGS_KEY] };
+          if (Array.isArray(raw.providers)) raw.providers = raw.providers.map(migrateProvider);
+          settings = normalizeSettings({ ...settings, ...raw });
         }
         r(settings);
       });
@@ -304,9 +316,8 @@ function hasExplicitEndOfResults() {
 }
 
 function _providerHostMatch(provider, host) {
-  if (provider.hostPattern) return hostMatchesGlob(host, provider.hostPattern);
-  const hostNeedle = String(provider.hostContains || "").toLowerCase();
-  return !hostNeedle || host.includes(hostNeedle);
+  if (!provider.hostPattern) return true;
+  return hostMatchesGlob(host, provider.hostPattern);
 }
 
 function getActiveProvider() {
@@ -588,11 +599,20 @@ function checkCaptchaState() {
   if (!isProviderHostPage()) return false;
 
   if (detectCaptcha()) {
+    captchaClearSent = false;
     reportCaptchaDetected();
     return true;
   }
   if (captchaDetected) {
+    captchaClearSent = false;
     reportCaptchaResolved();
+  } else if (!captchaClearSent) {
+    captchaClearSent = true;
+    sendMsg({
+      type: "CAPTCHA_STATUS",
+      status: "resolved",
+      url: window.location.href,
+    });
   }
   return false;
 }
@@ -1043,6 +1063,98 @@ function broadcastAutoNextDelay(secondsLeft) {
   });
 }
 
+function simulateMouseOver(el) {
+  if (!el) return;
+  el.dispatchEvent(new MouseEvent("mouseover", { bubbles: true, cancelable: true, view: window }));
+  el.dispatchEvent(new MouseEvent("mouseenter", { bubbles: false, cancelable: true, view: window }));
+}
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function randomBetween(min, max) {
+  return min + Math.random() * (max - min);
+}
+
+function humanPageScroll() {
+  return new Promise((resolve) => {
+    const maxY = Math.max(document.body.scrollHeight - window.innerHeight - 200, 0);
+    if (maxY <= 20) { resolve(); return; }
+
+    const steps = 2 + Math.floor(Math.random() * 5);
+    const stepSize = maxY / steps;
+    let i = 0;
+
+    function doStep() {
+      if (i >= steps) {
+        setTimeout(resolve, randomBetween(300, 700));
+        return;
+      }
+      i++;
+      const base = i * stepSize;
+      const jitter = (Math.random() - 0.5) * stepSize * 0.5;
+      const target = Math.min(Math.max(base + jitter, 0), maxY);
+      window.scrollTo({ top: target, behavior: "smooth" });
+      const pause = randomBetween(500, 1100);
+      if (i > 1 && i < steps && Math.random() < 0.35) {
+        setTimeout(() => {
+          const cur = window.scrollY;
+          window.scrollTo({ top: Math.max(cur - 80 - Math.random() * 120, 0), behavior: "smooth" });
+          setTimeout(doStep, randomBetween(700, 1200));
+        }, pause);
+        return;
+      }
+      setTimeout(doStep, pause);
+    }
+    doStep();
+  });
+}
+
+function humanClickNext(nextBtn) {
+  return new Promise((resolve) => {
+    if (!nextBtn || !nextBtn.isConnected) { resolve(false); return; }
+
+    const targetY = nextBtn.getBoundingClientRect().top + window.scrollY;
+    const startY = window.scrollY;
+    const distance = Math.max(0, targetY - startY + window.innerHeight * 0.2);
+
+    if (distance > 50) {
+      const duration = randomBetween(600, 1200);
+      const start = performance.now();
+      function step(now) {
+        const elapsed = now - start;
+        const progress = Math.min(elapsed / duration, 1);
+        const ease = 1 - Math.pow(1 - progress, 3);
+        window.scrollTo(0, startY + distance * ease);
+        if (progress < 1) {
+          requestAnimationFrame(step);
+        } else {
+          finish();
+        }
+      }
+      requestAnimationFrame(step);
+    } else {
+      finish();
+    }
+
+    function finish() {
+      simulateMouseOver(nextBtn);
+      setTimeout(() => {
+        if (!nextBtn.isConnected) { resolve(false); return; }
+        nextBtn.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, view: window }));
+        nextBtn.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true, view: window }));
+        if (Math.random() < 0.3) {
+          nextBtn.click();
+        } else {
+          nextBtn.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+        }
+        setTimeout(() => resolve(true), 50);
+      }, randomBetween(200, 500));
+    }
+  });
+}
+
 function scheduleAutoNext(delay, waitAttempt) {
   if (contextDead || !settings.autoNext || captchaDetected || captchaResumePending) return;
   if (!settings.enabled) return;
@@ -1093,15 +1205,31 @@ function scheduleAutoNext(delay, waitAttempt) {
     broadcastAutoNextDelay(remaining);
   }, 1000);
 
-  nextTimer = setTimeout(() => {
+  const jitteredDelay = Math.max(500, Math.round(delay * randomBetween(0.8, 1.2)));
+  nextTimer = setTimeout(async () => {
     clearAutoNextDelayCountdown();
     broadcastAutoNextDelay(0);
     if (contextDead || !settings.autoNext || captchaDetected) return;
     const hrefBefore = location.href;
     const pageBefore = getPageNumber();
     applyVisitedResultMarks(true);
-    dlog("Clicking next — page " + pageBefore + " \u2192 " + (pageBefore + 1));
-    nextBtn.click();
+    dlog("Scrolling page — page " + pageBefore + " \u2192 " + (pageBefore + 1));
+
+    await sleep(randomBetween(600, 1600));
+    await humanPageScroll();
+    await sleep(randomBetween(400, 900));
+
+    const nextBtn2 = findNextButton(provider?.nextSelector);
+    if (!nextBtn2) {
+      signalAutoNextStuck(pageBefore, "Next button disappeared after scroll");
+      return;
+    }
+    const clicked = await humanClickNext(nextBtn2);
+    if (!clicked) {
+      signalAutoNextStuck(pageBefore, "Could not click next button");
+      return;
+    }
+    dlog("Clicked next — page " + pageBefore + " \u2192 " + (pageBefore + 1));
     clearTimeout(navigationWatchTimer);
     navigationWatchTimer = setTimeout(() => {
       if (contextDead || !settings.autoNext || captchaDetected) return;
@@ -1109,8 +1237,8 @@ function scheduleAutoNext(delay, waitAttempt) {
         signalAutoNextDone(pageBefore, "Last page reached");
         dlog("Next click did not advance — treating as last page");
       }
-    }, 4500);
-  }, delay);
+    }, 5000);
+  }, jitteredDelay);
 }
 
 // --- Init ---
@@ -1147,6 +1275,7 @@ const urlObserver = new MutationObserver(() => {
   if (contextDead) return;
   if (location.href !== lastUrl) {
     lastUrl = location.href;
+    captchaClearSent = false;
     lastDoneSignalKey = "";
     resetVisitedCaches();
     clearTimeout(nextTimer);

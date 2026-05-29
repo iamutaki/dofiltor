@@ -27,16 +27,6 @@ describe("buildProviderSearchUrl", () => {
 });
 
 describe("providerMatchesUrl", () => {
-  it("matches enabled provider via hostContains (legacy)", () => {
-    const provider = {
-      enabled: true,
-      hostContains: "google.",
-      pathContains: "/search",
-    };
-    assert.equal(pu.providerMatchesUrl(provider, "https://www.google.com/search?q=test"), true);
-    assert.equal(pu.providerMatchesUrl(provider, "https://www.bing.com/search?q=test"), false);
-  });
-
   it("matches enabled provider via hostPattern (glob)", () => {
     const provider = {
       enabled: true,
@@ -46,16 +36,16 @@ describe("providerMatchesUrl", () => {
     assert.equal(pu.providerMatchesUrl(provider, "https://www.google.com/search?q=test"), true);
     assert.equal(pu.providerMatchesUrl(provider, "https://google.co.id/search?q=test"), true);
     assert.equal(pu.providerMatchesUrl(provider, "https://www.bing.com/search?q=test"), false);
+    assert.equal(pu.providerMatchesUrl(provider, "https://www.google.com/"), false);
   });
 
-  it("prefers hostPattern over hostContains", () => {
+  it("falls back when hostPattern is empty", () => {
     const provider = {
       enabled: true,
-      hostPattern: "**.bing.com",
-      hostContains: "google.",
+      hostPattern: "",
       pathContains: "/search",
     };
+    assert.equal(pu.providerMatchesUrl(provider, "https://www.google.com/search?q=test"), true);
     assert.equal(pu.providerMatchesUrl(provider, "https://www.bing.com/search?q=test"), true);
-    assert.equal(pu.providerMatchesUrl(provider, "https://www.google.com/search?q=test"), false);
   });
 });

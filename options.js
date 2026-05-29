@@ -1,10 +1,10 @@
 const SETTINGS_KEY = "dofiltor_settings";
 const DEFAULT_PROVIDERS = [
-  { id: "google", name: "Google", enabled: true, hostContains: "google.", pathContains: "/search", queryParam: "q", nextSelector: "#pnnext, a#pnnext, a[aria-label=\"Next page\"], a[aria-label=\"Halaman berikutnya\"]" },
-  { id: "bing", name: "Bing", enabled: true, hostContains: "bing.com", pathContains: "/search", queryParam: "q", nextSelector: "a.sb_pagN" },
-  { id: "duckduckgo", name: "DuckDuckGo", enabled: true, hostContains: "duckduckgo.com", pathContains: "/", queryParam: "q", nextSelector: "a[rel='next']" },
-  { id: "yahoo", name: "Yahoo", enabled: false, hostContains: "search.yahoo.com", pathContains: "/search", queryParam: "p", nextSelector: "a.next" },
-  { id: "yandex", name: "Yandex", enabled: false, hostContains: "yandex.", pathContains: "/search", queryParam: "text", nextSelector: "a[aria-label='Next page']" },
+  { id: "google", name: "Google", enabled: true, hostPattern: "**.google.**", pathContains: "/search", queryParam: "q", nextSelector: "#pnnext, a#pnnext, a[aria-label=\"Next page\"], a[aria-label=\"Halaman berikutnya\"]" },
+  { id: "bing", name: "Bing", enabled: true, hostPattern: "**.bing.com", pathContains: "/search", queryParam: "q", nextSelector: "a.sb_pagN" },
+  { id: "duckduckgo", name: "DuckDuckGo", enabled: true, hostPattern: "**.duckduckgo.com", pathContains: "/", queryParam: "q", nextSelector: "a[rel='next']" },
+  { id: "yahoo", name: "Yahoo", enabled: false, hostPattern: "**.search.yahoo.com", pathContains: "/search", queryParam: "p", nextSelector: "a.next" },
+  { id: "yandex", name: "Yandex", enabled: false, hostPattern: "**.yandex.**", pathContains: "/search", queryParam: "text", nextSelector: "a[aria-label='Next page']" },
 ];
 const STATIC_PROVIDER_HOSTS = new Set([
   "google.com", "google.co.id", "bing.com", "duckduckgo.com",
@@ -44,6 +44,15 @@ function normalizeFileTypes(text) {
     .filter((ext, index, list) => list.indexOf(ext) === index);
 }
 
+function migrateProvider(p) {
+  if (p.hostContains && !p.hostPattern) {
+    const h = p.hostContains.replace(/^\.+|\.+$/g, "");
+    p.hostPattern = h.includes(".") ? "**." + h : "**." + h + ".**";
+  }
+  delete p.hostContains;
+  return p;
+}
+
 function loadSettings() {
   if (!hasChromeStorage()) return Promise.resolve({ ...DEFAULT_SETTINGS });
   return new Promise((resolve) => {
@@ -55,7 +64,9 @@ function loadSettings() {
         ...stored,
         fileTypes: migration.fileTypes,
         fileTypesVersion: migration.fileTypesVersion,
-        providers: Array.isArray(stored.providers) && stored.providers.length ? stored.providers : DEFAULT_PROVIDERS,
+        providers: Array.isArray(stored.providers) && stored.providers.length
+          ? stored.providers.map(migrateProvider)
+          : DEFAULT_PROVIDERS,
       });
     });
   });
@@ -73,22 +84,12 @@ function saveSettings(next) {
   });
 }
 
-function providerHostBase(hostContains) {
-  return String(hostContains || "")
-    .trim()
-    .toLowerCase()
-    .replace(/^https?:\/\//, "")
-    .replace(/^\*:\/\//, "")
-    .replace(/^\*\./, "")
-    .replace(/^\./, "")
-    .replace(/\/.*$/, "")
-    .replace(/:\d+$/, "")
-    .replace(/[^a-z0-9.-]/g, "")
-    .replace(/^\.+|\.+$/g, "");
+function providerHostBase(hostPattern) {
+  return hostBaseFromPattern(hostPattern || "");
 }
 
 function providerOrigins(provider) {
-  const host = providerHostBase(provider.hostContains);
+  const host = providerHostBase(provider.hostPattern);
   if (!host || !host.includes(".") || host.endsWith(".")) return [];
   return [
     "http://" + host + "/*",
@@ -112,10 +113,10 @@ function evaluateProviderRules(provider, url) {
   } catch (e) {
     parsed = null;
   }
-  const hostNeedle = String(provider.hostContains || "").toLowerCase();
+  const hostNeedle = String(provider.hostPattern || "").toLowerCase();
   const pathNeedle = String(provider.pathContains || "").toLowerCase();
   const queryParam = String(provider.queryParam || "").trim();
-  const host = !hostNeedle || (urlValid && parsed.hostname.toLowerCase().includes(hostNeedle));
+  const host = !hostNeedle || (urlValid && hostMatchesGlob(parsed.hostname.toLowerCase(), hostNeedle));
   const path = !pathNeedle || (urlValid && parsed.pathname.toLowerCase().includes(pathNeedle));
   const query = !queryParam || (urlValid && parsed.searchParams.has(queryParam));
   const pageMatch = urlValid && host && path;
@@ -144,7 +145,7 @@ function getActiveTabUrl() {
 function readProviderFromBox(box) {
   return {
     enabled: box.querySelector(".provider-enabled").checked,
-    hostContains: box.querySelector(".provider-host").value.trim().toLowerCase(),
+    hostPattern: box.querySelector(".provider-host").value.trim().toLowerCase(),
     pathContains: box.querySelector(".provider-path").value.trim(),
     queryParam: box.querySelector(".provider-query").value.trim() || "q",
   };
@@ -209,21 +210,30 @@ function runProviderTest(box, urlOverride) {
     collects: evaluated.collects,
     hostname: evaluated.hostname,
     pathname: evaluated.pathname,
-    hostNeedle: provider.hostContains,
+    hostNeedle: provider.hostPattern,
     pathNeedle: provider.pathContains,
     queryParam: provider.queryParam,
   });
 }
 
+function isStaticProvider(provider) {
+  const pattern = provider.hostPattern;
+  if (!pattern) return false;
+  for (const sh of STATIC_PROVIDER_HOSTS) {
+    if (hostMatchesGlob(sh, pattern)) return true;
+  }
+  return false;
+}
+
 function providerPermissionState(provider) {
   const origins = providerOrigins(provider);
-  const host = providerHostBase(provider.hostContains);
+  const host = providerHostBase(provider.hostPattern);
   if (!provider.enabled) return Promise.resolve({ state: "disabled", label: t("permissionDisabled") });
+  if (isStaticProvider(provider)) {
+    return Promise.resolve({ state: "granted", label: t("permissionBuiltIn") });
+  }
   if (!host || !host.includes(".") || host.endsWith(".")) {
     return Promise.resolve({ state: "invalid", label: t("permissionInvalid") });
-  }
-  if (STATIC_PROVIDER_HOSTS.has(host)) {
-    return Promise.resolve({ state: "granted", label: t("permissionBuiltIn") });
   }
   if (typeof chrome === "undefined" || !chrome.permissions?.contains) {
     return Promise.resolve({ state: "needed", label: t("permissionUnknown") });
@@ -238,8 +248,8 @@ function providerPermissionState(provider) {
 function customProviderOrigins(nextProviders) {
   const origins = [];
   for (const provider of nextProviders) {
-    const host = providerHostBase(provider.hostContains);
-    if (!provider.enabled || STATIC_PROVIDER_HOSTS.has(host)) continue;
+    const host = providerHostBase(provider.hostPattern);
+    if (!provider.enabled || (host && STATIC_PROVIDER_HOSTS.has(host)) || isStaticProvider(provider)) continue;
     origins.push(...providerOrigins(provider));
   }
   return [...new Set(origins)];
@@ -312,7 +322,7 @@ function providerTemplate(provider, index) {
 
   grid.append(
     makeField("Name", "provider-name", provider.name || ""),
-    makeField("Host contains", "provider-host", provider.hostContains || ""),
+    makeField("Host pattern", "provider-host", provider.hostPattern || ""),
     makeField("Path contains", "provider-path", provider.pathContains || ""),
     makeField("Query param", "provider-query", provider.queryParam || "q"),
     makeField("Next selector", "provider-next", provider.nextSelector || "")
@@ -393,12 +403,12 @@ function readProviders() {
       id: name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "provider-" + index,
       name,
       enabled: box.querySelector(".provider-enabled").checked,
-      hostContains: box.querySelector(".provider-host").value.trim().toLowerCase(),
+      hostPattern: box.querySelector(".provider-host").value.trim().toLowerCase(),
       pathContains: box.querySelector(".provider-path").value.trim(),
       queryParam: box.querySelector(".provider-query").value.trim() || "q",
       nextSelector: box.querySelector(".provider-next").value.trim(),
     };
-  }).filter((provider) => provider.hostContains);
+  }).filter((provider) => provider.hostPattern);
 }
 
 function sendRuntimeMessage(payload) {
@@ -488,7 +498,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     applyTheme($("themeSelect").value);
   });
   $("addProvider").addEventListener("click", () => {
-    providers.push({ id: "custom", name: "Custom", enabled: true, hostContains: "", pathContains: "/search", queryParam: "q", nextSelector: "" });
+    providers.push({ id: "custom", name: "Custom", enabled: true, hostPattern: "", pathContains: "/search", queryParam: "q", nextSelector: "" });
     renderProviders();
     localizeOptions();
   });
@@ -589,7 +599,7 @@ function localizeOptions() {
     const input = span.parentElement.querySelector("input");
     const map = {
       "provider-name": "name",
-      "provider-host": "hostContains",
+      "provider-host": "hostPattern",
       "provider-path": "pathContains",
       "provider-query": "queryParam",
       "provider-next": "nextSelector",

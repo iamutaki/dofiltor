@@ -122,6 +122,7 @@
     }
     .scope-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--c-border); flex-shrink: 0; }
     .scope-bar.collecting .scope-dot { background: var(--c-green); }
+    .scope-bar.collecting #scopeText { color: var(--c-green); }
     .scope-bar.duplicate .scope-dot { background: var(--c-orange); }
     .scope-bar.paused .scope-dot { background: var(--c-orange); }
     .scope-bar.unsupported .scope-dot { background: var(--c-text-3); }
@@ -1042,13 +1043,6 @@
     <span class="spacer"></span>
     <button class="ib danger" id="btnRemoveDead" style="display:none" data-tip="Remove dead" data-i18n-tip="removeDead" data-i18n-aria="removeDead">
       <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-    </button>
-    <button class="ib" id="btnSelectDead" style="display:none" data-tip="Select all dead" data-i18n-tip="selectDead" data-i18n-aria="selectDead">
-      <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-      <span class="badge sel" id="deadBadge" style="display:none"></span>
-    </button>
-    <button class="ib" id="btnSelectPending" style="display:none" data-tip="Select all pending" data-i18n-tip="selectPending" data-i18n-aria="selectPending">
-      <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
     </button>
     <button class="ib danger" id="btnClear" data-tip="Clear all" data-i18n-tip="clearAll" data-i18n-aria="clearAll">
       <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>

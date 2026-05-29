@@ -69,7 +69,7 @@
   "providers": "Provider",
   "providerHint": "Cocokkan halaman hasil berdasarkan host dan path.",
   "name": "Nama",
-  "hostContains": "Host memuat",
+  "hostPattern": "Pola host",
   "pathContains": "Path memuat",
   "queryParam": "Parameter query",
   "nextSelector": "Selector berikutnya",
@@ -214,7 +214,7 @@
   "providerTestNoUrl": "Isi URL atau klik Gunakan tab aktif.",
   "providerTestUrlInvalid": "Bukan URL http(s) yang valid.",
   "providerTestTabUnavailable": "Tab aktif bukan halaman web biasa (buka tab hasil pencarian).",
-  "providerTestHost": "Host mengandung \"{needle}\" — {host}",
+  "providerTestHost": "Pola host \"{needle}\" — {host}",
   "providerTestPath": "Path mengandung \"{needle}\" — {path}",
   "providerTestQuery": "Parameter query \"{param}\" ada",
   "providerTestEnabled": "Provider aktif",
@@ -263,8 +263,6 @@
   "shortcutGrab": "Grab halaman",
   "shortcutClear": "Hapus filter",
 
-  "selectDead": "Pilih semua dead",
-  "selectPending": "Pilih semua pending",
   "selectedCount": "Dipilih {n}",
   "removedCount": "Dihapus {n} URL",
 

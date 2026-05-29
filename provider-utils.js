@@ -10,8 +10,8 @@ const PROVIDER_SEARCH_BASE = {
   yandex: "https://yandex.com/search/",
 };
 
-function providerHostBase(hostContains) {
-  return hostBaseFromPattern(hostContains);
+function providerHostBase(hostPattern) {
+  return hostBaseFromPattern(hostPattern || "");
 }
 
 function buildProviderSearchUrl(provider, query) {
@@ -44,10 +44,7 @@ function providerMatchesUrl(provider, url) {
     const pathNeedle = String(provider.pathContains || "").toLowerCase();
     const hostMatch = provider.hostPattern
       ? hostMatchesGlob(host, provider.hostPattern)
-      : (function () {
-          const hostNeedle = String(provider.hostContains || "").toLowerCase();
-          return !hostNeedle || host.includes(hostNeedle);
-        })();
+      : true;
     return !!provider.enabled &&
       hostMatch &&
       (!pathNeedle || parsed.pathname.toLowerCase().includes(pathNeedle));
